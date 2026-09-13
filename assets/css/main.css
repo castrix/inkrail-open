@@ -1,0 +1,61 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Literata:opsz,wght@7..72,400;7..72,600&family=Noto+Serif+TC:wght@400;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --bg: #101210;
+  --panel: #181b18;
+  --panel-soft: #20241f;
+  --line: rgba(244, 239, 227, .12);
+  --muted: #9da59b;
+  --text: #f4efe3;
+}
+
+* { box-sizing: border-box; }
+html { background: var(--bg); }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: Inter, system-ui, sans-serif; }
+button, input, select, textarea { font: inherit; }
+a { color: inherit; text-decoration: none; }
+
+.surface {
+  border: 1px solid var(--line);
+  background: linear-gradient(145deg, rgba(255,255,255,.035), rgba(255,255,255,.012));
+  box-shadow: 0 22px 60px rgba(0,0,0,.2);
+}
+
+.field {
+  width: 100%; border: 1px solid var(--line); border-radius: .85rem;
+  background: rgba(255,255,255,.035); color: var(--text); padding: .78rem .9rem;
+  outline: none;
+}
+.field:focus { border-color: rgba(201,169,110,.65); box-shadow: 0 0 0 3px rgba(201,169,110,.1); }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+  border-radius: .8rem; border: 1px solid var(--line); padding: .72rem 1rem;
+  font-weight: 600; transition: .18s ease; cursor: pointer;
+}
+.btn:hover { transform: translateY(-1px); border-color: rgba(201,169,110,.55); }
+.btn-primary { background: #c9a96e; border-color: #c9a96e; color: #17140e; }
+.btn-quiet { background: rgba(255,255,255,.04); color: var(--text); }
+.btn-danger { background: rgba(184,93,60,.13); border-color: rgba(184,93,60,.4); color: #efad95; }
+
+.badge { display: inline-flex; align-items: center; border-radius: 999px; padding: .25rem .55rem; font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.badge-good { background: rgba(93,156,118,.14); color: #a7dfb9; }
+.badge-warn { background: rgba(201,169,110,.14); color: #e4c98f; }
+.badge-muted { background: rgba(255,255,255,.07); color: #aeb6ac; }
+.badge-bad { background: rgba(184,93,60,.14); color: #efa58b; }
+
+.page-enter-active, .page-leave-active { transition: opacity .16s ease, transform .16s ease; }
+.page-enter-from, .page-leave-to { opacity: 0; transform: translateY(4px); }
+
+@media (max-width: 720px) {
+  .mobile-hide { display: none !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nuxt-loading-indicator { transition: none !important; }
+  .animate-pulse { animation: none !important; }
+}

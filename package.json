@@ -1,0 +1,51 @@
+{
+  "name": "inkrail",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev --host 127.0.0.1",
+    "preview": "nuxt preview --host 127.0.0.1",
+    "start": "node --env-file=.env .output/server/index.mjs",
+    "postinstall": "prisma generate && nuxt prepare",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "worker": "node --env-file=.env --import tsx workers/worker.ts",
+    "test": "vitest run && node --test tests/extensions.test.mjs scripts/launcher/config.test.mjs scripts/launcher/configure.test.mjs scripts/launcher/prepare.test.mjs scripts/launcher/status-summary.test.mjs",
+    "test:watch": "vitest",
+    "import:tachimanga": "node --env-file=.env --import tsx scripts/import-tachimanga.ts",
+    "tailscale:serve": "node scripts/tailscale.mjs serve",
+    "tailscale:status": "node scripts/tailscale.mjs status",
+    "tailscale:off": "node scripts/tailscale.mjs off",
+    "setup": "node scripts/setup.mjs",
+    "typecheck": "nuxt typecheck",
+    "test:extensions": "node --test tests/extensions.test.mjs",
+    "check:public": "node scripts/check-public.mjs"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.0",
+    "bcryptjs": "^3.0.2",
+    "cheerio": "^1.1.2",
+    "impit": "^0.13.0",
+    "nuxt": "^3.20.1",
+    "playwright": "^1.55.0",
+    "sharp": "^0.35.4",
+    "zod": "^4.1.11"
+  },
+  "devDependencies": {
+    "@nuxtjs/tailwindcss": "^6.14.0",
+    "@types/node": "^24.5.2",
+    "prisma": "^6.19.0",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4",
+    "vue-tsc": "^3.3.11"
+  },
+  "version": "0.1.0",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  }
+}
