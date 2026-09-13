@@ -8,7 +8,7 @@ const presets: Record<TestMode, { label: string, description: string, download: 
   large: { label: 'Large', description: '96 MB down · 48 MB up', download: 96 * 1024 * 1024, upload: 48 * 1024 * 1024, streams: 2 }
 }
 
-const mode = ref<TestMode>('standard')
+const mode = ref<TestMode>('quick')
 const running = ref(false)
 const phase = ref<'idle' | 'latency' | 'download' | 'upload' | 'complete' | 'cancelled' | 'error'>('idle')
 const error = ref('')
@@ -160,24 +160,24 @@ onBeforeUnmount(cancel)
 <template>
   <div class="mx-auto max-w-6xl px-5 py-10 md:py-16">
     <section class="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
-      <div><p class="mb-3 text-xs font-semibold uppercase tracking-[.24em] text-gold/80">Network tools</p><h1 class="font-serif text-4xl font-semibold md:text-6xl">Tailnet speed test</h1><p class="mt-4 max-w-2xl text-sm leading-7 text-white/45">Measure the real browser-to-Inkrail path, including Tailscale, Wi-Fi or mobile data, encryption, and HTTP overhead.</p></div>
-      <div class="rounded-xl border border-white/10 bg-white/[.03] px-4 py-3 text-xs text-white/45"><span class="mr-2 inline-block h-2 w-2 rounded-full bg-[#8ecaa3]"></span>{{ currentHost }}</div>
+      <div><p class="mb-3 text-xs font-semibold uppercase tracking-[.24em] text-gold">Network tools</p><h1 class="font-serif text-4xl font-semibold md:text-6xl">Connection speed test</h1><p class="mt-4 max-w-2xl text-sm leading-7 text-muted">This measures your browser’s connection to this Inkrail server, not general internet speed, including Tailscale, Wi-Fi or mobile data, encryption, and HTTP overhead.</p></div>
+      <div class="rounded-xl border border-white/10 bg-white/[.03] px-4 py-3 text-xs text-muted"><span class="mr-2 inline-block h-2 w-2 rounded-full bg-[#8ecaa3]"></span>{{ currentHost }}</div>
     </section>
 
     <section class="surface mt-10 overflow-hidden rounded-3xl">
       <div class="grid gap-8 p-5 sm:p-8 lg:grid-cols-[.8fr_1.2fr]">
         <div>
-          <p class="text-xs font-semibold uppercase tracking-[.2em] text-white/35">Test size</p>
+          <p class="text-xs font-semibold uppercase tracking-[.2em] text-muted">Test size</p>
           <div class="mt-4 grid grid-cols-3 gap-2">
-            <button v-for="(preset, key) in presets" :key="key" class="rounded-xl border px-2 py-3 text-left transition sm:px-4" :class="mode === key ? 'border-gold/70 bg-gold/10 text-gold' : 'border-white/10 bg-white/[.025] text-white/50'" :disabled="running" @click="selectMode(key)"><span class="block text-sm font-semibold">{{ preset.label }}</span><span class="mt-1 hidden text-[10px] opacity-60 sm:block">{{ preset.description }}</span></button>
+            <button v-for="(preset, key) in presets" :key="key" class="rounded-xl border px-2 py-3 text-left transition sm:px-4" :class="mode === key ? 'border-gold/70 bg-gold/10 text-gold' : 'border-white/10 bg-white/[.025] text-muted'" :disabled="running" @click="selectMode(key)"><span class="block text-sm font-semibold">{{ preset.label }}</span><span class="mt-1 block text-xs opacity-80">{{ preset.description }}</span></button>
           </div>
 
           <div class="mt-8 rounded-2xl border border-white/10 bg-black/15 p-5">
-            <div class="flex items-center justify-between text-sm"><span class="font-semibold">{{ phaseLabel }}</span><span class="font-mono text-white/40">{{ progress }}%</span></div>
+            <div class="flex items-center justify-between text-sm"><span class="font-semibold">{{ phaseLabel }}</span><span class="font-mono text-muted">{{ progress }}%</span></div>
             <div class="mt-3 h-2 overflow-hidden rounded-full bg-white/5"><div class="h-full rounded-full bg-gold transition-[width] duration-300" :style="{ width: `${progress}%` }" /></div>
-            <p v-if="phase === 'download'" class="mt-3 text-xs text-white/35">{{ (downloadedBytes / 1024 / 1024).toFixed(1) }} of {{ (expectedDownloadBytes / 1024 / 1024).toFixed(0) }} MB received</p>
-            <p v-else-if="phase === 'upload'" class="mt-3 text-xs text-white/35">{{ (uploadedBytes / 1024 / 1024).toFixed(1) }} of {{ (expectedUploadBytes / 1024 / 1024).toFixed(0) }} MB sent<span v-if="uploadedBytes === expectedUploadBytes"> · Waiting for server confirmation</span></p>
-            <p v-else class="mt-3 text-xs text-white/35">Test data is generated in memory and is never saved.</p>
+            <p v-if="phase === 'download'" class="mt-3 text-xs text-muted">{{ (downloadedBytes / 1024 / 1024).toFixed(1) }} of {{ (expectedDownloadBytes / 1024 / 1024).toFixed(0) }} MB received</p>
+            <p v-else-if="phase === 'upload'" class="mt-3 text-xs text-muted">{{ (uploadedBytes / 1024 / 1024).toFixed(1) }} of {{ (expectedUploadBytes / 1024 / 1024).toFixed(0) }} MB sent<span v-if="uploadedBytes === expectedUploadBytes"> · Waiting for server confirmation</span></p>
+            <p v-else class="mt-3 text-xs text-muted">Test data is generated in memory and is never saved.</p>
           </div>
 
           <button v-if="!running" class="btn btn-primary mt-5 w-full py-3.5" @click="start">Start speed test</button>
@@ -186,14 +186,14 @@ onBeforeUnmount(cancel)
         </div>
 
         <div class="grid grid-cols-2 gap-3 sm:gap-4">
-          <div class="rounded-2xl border border-white/10 bg-white/[.025] p-5 sm:p-7"><p class="text-xs uppercase tracking-[.18em] text-white/35">Latency</p><p class="mt-4 font-serif text-4xl font-semibold sm:text-5xl">{{ shown(latency) }}</p><p class="mt-1 text-xs text-white/35">milliseconds</p></div>
-          <div class="rounded-2xl border border-white/10 bg-white/[.025] p-5 sm:p-7"><p class="text-xs uppercase tracking-[.18em] text-white/35">Jitter</p><p class="mt-4 font-serif text-4xl font-semibold sm:text-5xl">{{ shown(jitter) }}</p><p class="mt-1 text-xs text-white/35">milliseconds</p></div>
-          <div class="rounded-2xl border border-white/10 bg-white/[.025] p-5 sm:p-7"><p class="text-xs uppercase tracking-[.18em] text-white/35">Download</p><p class="mt-4 font-serif text-4xl font-semibold text-gold sm:text-5xl">{{ shown(download) }}</p><p class="mt-1 text-xs text-white/35">Mbps<span v-if="phase === 'download'"> · Live average</span></p></div>
-          <div class="rounded-2xl border border-white/10 bg-white/[.025] p-5 sm:p-7"><p class="text-xs uppercase tracking-[.18em] text-white/35">Upload</p><p class="mt-4 font-serif text-4xl font-semibold text-gold sm:text-5xl">{{ shown(upload) }}</p><p class="mt-1 text-xs text-white/35">Mbps<span v-if="phase === 'upload'"> · Live average</span></p></div>
+          <div class="rounded-2xl border border-white/10 bg-white/[.025] p-5 sm:p-7"><p class="text-xs uppercase tracking-[.18em] text-muted">Latency</p><p class="mt-4 font-serif text-4xl font-semibold sm:text-5xl">{{ shown(latency) }}</p><p class="mt-1 text-xs text-muted">milliseconds</p></div>
+          <div class="rounded-2xl border border-white/10 bg-white/[.025] p-5 sm:p-7"><p class="text-xs uppercase tracking-[.18em] text-muted">Jitter</p><p class="mt-4 font-serif text-4xl font-semibold sm:text-5xl">{{ shown(jitter) }}</p><p class="mt-1 text-xs text-muted">milliseconds</p></div>
+          <div class="rounded-2xl border border-white/10 bg-white/[.025] p-5 sm:p-7"><p class="text-xs uppercase tracking-[.18em] text-muted">Download</p><p class="mt-4 font-serif text-4xl font-semibold text-gold sm:text-5xl">{{ shown(download) }}</p><p class="mt-1 text-xs text-muted">Mbps<span v-if="phase === 'download'"> · Live average</span></p></div>
+          <div class="rounded-2xl border border-white/10 bg-white/[.025] p-5 sm:p-7"><p class="text-xs uppercase tracking-[.18em] text-muted">Upload</p><p class="mt-4 font-serif text-4xl font-semibold text-gold sm:text-5xl">{{ shown(upload) }}</p><p class="mt-1 text-xs text-muted">Mbps<span v-if="phase === 'upload'"> · Live average</span></p></div>
         </div>
       </div>
     </section>
 
-    <section v-if="history.length" class="mt-12"><div class="mb-4 flex items-center justify-between"><h2 class="font-serif text-2xl font-semibold">Recent results</h2><span class="text-xs text-white/30">Stored on this device</span></div><div class="overflow-x-auto rounded-2xl border border-white/10"><table class="w-full min-w-[620px] text-left text-sm"><thead class="bg-white/[.035] text-xs uppercase tracking-wider text-white/35"><tr><th class="px-5 py-3">When</th><th class="px-5 py-3">Latency</th><th class="px-5 py-3">Jitter</th><th class="px-5 py-3">Download</th><th class="px-5 py-3">Upload</th></tr></thead><tbody><tr v-for="item in history" :key="item.testedAt" class="border-t border-white/10"><td class="px-5 py-4 text-white/50">{{ new Date(item.testedAt).toLocaleString() }}</td><td class="px-5 py-4">{{ item.latency.toFixed(1) }} ms</td><td class="px-5 py-4">{{ item.jitter.toFixed(1) }} ms</td><td class="px-5 py-4 text-gold">{{ item.download.toFixed(1) }} Mbps</td><td class="px-5 py-4 text-gold">{{ item.upload.toFixed(1) }} Mbps</td></tr></tbody></table></div></section>
+    <section v-if="history.length" class="mt-12"><div class="mb-4 flex items-center justify-between"><h2 class="font-serif text-2xl font-semibold">Recent results</h2><span class="text-xs text-muted">Stored on this device</span></div><div class="speed-history overflow-x-auto rounded-2xl border border-white/10"><table class="w-full min-w-[620px] text-left text-sm"><thead class="bg-white/[.035] text-xs uppercase tracking-wider text-muted"><tr><th class="px-5 py-3">When</th><th class="px-5 py-3">Latency</th><th class="px-5 py-3">Jitter</th><th class="px-5 py-3">Download</th><th class="px-5 py-3">Upload</th></tr></thead><tbody><tr v-for="item in history" :key="item.testedAt" class="border-t border-white/10"><td class="px-5 py-4 text-muted">{{ new Date(item.testedAt).toLocaleString() }}</td><td class="px-5 py-4">{{ item.latency.toFixed(1) }} ms</td><td class="px-5 py-4">{{ item.jitter.toFixed(1) }} ms</td><td class="px-5 py-4 text-gold">{{ item.download.toFixed(1) }} Mbps</td><td class="px-5 py-4 text-gold">{{ item.upload.toFixed(1) }} Mbps</td></tr></tbody></table></div></section>
   </div>
 </template>

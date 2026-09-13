@@ -1,4 +1,5 @@
 import prisma from '~/server/lib/prisma'
+import { requireTranslationEnabled } from '~/server/utils/translation-enabled'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
@@ -6,6 +7,7 @@ export default defineEventHandler(async (event) => {
   if (!job || !['WAITING_FOR_ACCESS', 'FAILED', 'PARTIAL'].includes(job.status)) {
     throw createError({ statusCode: 400, statusMessage: 'This job cannot be resumed' })
   }
+  if (!['SCRAPE_CHAPTERS', 'DOWNLOAD_MANGA'].includes(job.type)) requireTranslationEnabled()
   let selectedIds: string[] | null = null
   try {
     const payload = job.payload ? JSON.parse(job.payload) : null

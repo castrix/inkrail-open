@@ -2,6 +2,7 @@
 definePageMeta({ layout: 'default' })
 const route = useRoute()
 const password = ref('')
+const showPassword = ref(false)
 const error = ref('')
 const loading = ref(false)
 
@@ -29,14 +30,15 @@ async function unlock() {
         <span class="grid h-12 w-12 place-items-center rounded-2xl bg-gold font-serif text-2xl font-semibold text-ink">I</span>
         <div>
           <h1 class="font-serif text-2xl font-semibold">Unlock Inkrail</h1>
-          <p class="mt-1 text-sm text-white/45">Your personal novel and manga library.</p>
+          <p class="mt-1 text-sm text-muted">Your personal novel and manga library.</p>
         </div>
       </div>
-      <label class="mb-2 block text-xs font-semibold uppercase tracking-[.16em] text-white/45">Owner password</label>
-      <input v-model="password" class="field" type="password" autocomplete="current-password" autofocus placeholder="Enter password" />
-      <p v-if="error" class="mt-3 text-sm text-[#efa58b]">{{ error }}</p>
+      <label for="owner-password" class="mb-2 block text-xs font-semibold uppercase tracking-[.16em] text-muted">Owner password</label>
+      <input id="owner-password" v-model="password" class="field" :type="showPassword ? 'text' : 'password'" autocomplete="current-password" autofocus placeholder="Enter password" />
+      <button type="button" class="btn btn-quiet mt-3" :aria-pressed="showPassword" @click="showPassword = !showPassword">{{ showPassword ? 'Hide password' : 'Show password' }}</button>
+      <p role="alert" v-if="error" class="mt-3 text-sm text-[#efa58b]">{{ error }}</p>
       <button class="btn btn-primary mt-6 w-full" :disabled="loading">{{ loading ? 'Unlocking…' : 'Enter library' }}</button>
-      <p class="mt-6 text-center text-xs leading-5 text-white/35">Sign in with the owner password from your private configuration.</p>
+      <p class="mt-6 text-center text-xs leading-5 text-muted">Forgot the owner password? On the host computer, open the Inkrail tray menu → Settings to update the password, then restart. You can also update OWNER_PASSWORD in your private .env file.</p>
     </form>
   </div>
 </template>

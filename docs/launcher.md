@@ -19,7 +19,7 @@ From the tray, choose **Settings > Preferences** to change the port, network acc
 
 The default port is **4000**; the existing developer installation uses **4001**. Keep network access off for local use. If another app uses your chosen port, choose a different port—the launcher never stops another app to claim it.
 
-Sources are installed separately through **Extensions** with a publisher's repository URL and fingerprint. No public catalog is preconfigured. Codex CLI is optional and only needed for translation/character features.
+Sources are installed separately through **Extensions** with a publisher's repository URL and fingerprint. The **Use public repository** button fills the public catalog details; the publisher is not trusted until you explicitly confirm. Codex CLI is optional and only needed for translation/character features.
 
 ## Updates and source checkouts
 

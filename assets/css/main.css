@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Literata:opsz,wght@7..72,400;7..72,600&family=Noto+Serif+TC:wght@400;600&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -59,3 +58,41 @@ a { color: inherit; text-decoration: none; }
   .nuxt-loading-indicator { transition: none !important; }
   .animate-pulse { animation: none !important; }
 }
+
+/* Local system fonts keep first launch and offline reading independent of a font CDN. */
+.text-muted { color: #b5bdb1; }
+.btn, summary { min-height: 44px; }
+button:not(:disabled), summary, a { -webkit-tap-highlight-color: transparent; }
+button:disabled { cursor: not-allowed; }
+input, select, textarea { min-width: 0; }
+.field { min-height: 48px; font-size: 16px; }
+select.field option { background: #20241f; color: #f4efe3; }
+:focus-visible { outline: 3px solid #c9a96e; outline-offset: 3px; }
+.app-dialog { width: min(32rem, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); padding: 0; border: 1px solid #64715e; border-radius: 1.5rem; background: #181b18; color: #f4efe3; }
+.app-dialog::backdrop { background: #000b; backdrop-filter: blur(4px); }
+.skip-link { position: fixed; top: -100px; left: 16px; z-index: 200; padding: 12px 18px; background: #c9a96e; color: #101210; border-radius: 8px; }
+.skip-link:focus { top: 12px; }
+.reader-surface { min-height: 100dvh; }
+.reader-surface button, .reader-surface select, .reader-surface input, .reader-surface header a { min-height: 44px; }
+.reader-surface button { min-width: 44px; }
+.reader-surface header { padding-top: max(.5rem, env(safe-area-inset-top)); }
+.reader-surface footer { padding-bottom: max(.5rem, env(safe-area-inset-bottom)); }
+.reader-settings { bottom: max(1rem, env(safe-area-inset-bottom)); }
+.reader-image { max-height: calc(100dvh - 12rem); }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+
+@media (max-width: 639px) {
+  .speed-history table, .speed-history tbody { display: block; min-width: 0; }
+  .speed-history thead { display: none; }
+  .speed-history tr { display: grid; grid-template-columns: 1fr 1fr; padding: 12px; }
+  .speed-history td { padding: 8px; }
+  .speed-history td:first-child { grid-column: 1 / -1; }
+  .speed-history td::before { display: block; color: #b5bdb1; font-size: 12px; }
+  .speed-history td:nth-child(2)::before { content: 'Latency'; }
+  .speed-history td:nth-child(3)::before { content: 'Jitter'; }
+  .speed-history td:nth-child(4)::before { content: 'Download'; }
+  .speed-history td:nth-child(5)::before { content: 'Upload'; }
+}
+
+button { min-height: 44px; min-width: 44px; }
+input[type="checkbox"] { width: 24px; height: 24px; flex-shrink: 0; }

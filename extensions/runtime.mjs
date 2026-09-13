@@ -129,7 +129,7 @@ export class ExtensionManager {
   mutate(fn) { const task = this.barrier.then(fn); this.barrier = task.catch(() => {}); return task }
   async list() {
     await this.barrier; const state = await this.load()
-    return { repositories: state.repositories, installed: Object.values(state.installed).map(item => ({ ...item, config: undefined, configuredKeys: Object.keys(item.config || {}), running: !this.runners.get(item.manifest.id)?.closed && this.runners.has(item.manifest.id) })) }
+    return { repositories: state.repositories, installed: Object.values(state.installed).map(item => ({ ...item, config: undefined, settings: Object.fromEntries(item.manifest.settings.filter(field => field.type !== 'secret').map(field => [field.key, item.config?.[field.key] ?? field.default ?? (field.type === 'select' ? field.options?.[0] : '') ?? ''])), configuredKeys: Object.keys(item.config || {}), running: !this.runners.get(item.manifest.id)?.closed && this.runners.has(item.manifest.id) })) }
   }
   async sources() { return (await this.list()).installed.filter(i => i.enabled).map(i => i.manifest) }
   async addRepository(url, key) {

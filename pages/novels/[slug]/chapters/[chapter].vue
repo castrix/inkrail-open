@@ -3,7 +3,9 @@ import type { ReaderEntity } from '~/shared/utils/encyclopedia'
 
 const route = useRoute()
 const chapterId = computed(() => String(route.params.chapter))
-const { data, refresh } = await useFetch(() => `/api/chapters/${chapterId.value}`)
+const { data: features } = await useFetch('/api/features')
+const { data, error, pending, refresh } = await useFetch(() => `/api/chapters/${chapterId.value}`)
+useHead({ title: () => data.value ? `${data.value.translation.title || data.value.source.title} — ${data.value.chapter.novel.titleOriginal} — Inkrail` : 'Chapter — Inkrail' })
 const mode = ref<'translation' | 'source' | 'parallel'>('translation')
 const theme = ref<'dark' | 'sepia' | 'light'>('dark')
 const fontSize = ref(20)
@@ -26,7 +28,14 @@ let archivePoller: ReturnType<typeof setInterval> | undefined
 let chromeTimer: ReturnType<typeof setTimeout> | undefined
 let dictionaryPoller: ReturnType<typeof setInterval> | undefined
 let restoringScroll = false
+let userScrolled = false
+function markScrollIntent(event: Event) {
+  if ((event.target as HTMLElement)?.closest?.('input, select, textarea, button')) return
+  if (event instanceof KeyboardEvent && !['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End', ' '].includes(event.key)) return
+  userScrolled = true
+}
 let pendingRestorePosition: number | null = null
+onBeforeRouteLeave(() => { saveDevicePosition(); userScrolled = false; clearTimeout(localSaveTimer); clearTimeout(saveTimer) })
 
 function scrollPosition() {
   const maximum = document.documentElement.scrollHeight - window.innerHeight
@@ -39,8 +48,8 @@ function localPositionKey(chapter = data.value?.chapter.id) {
 
 function saveDevicePosition() {
   const key = localPositionKey()
-  if (!key) return
-  localStorage.setItem(key, JSON.stringify({ position: scrollPosition(), updatedAt: new Date().toISOString() }))
+  if (!key || !userScrolled || restoringScroll) return
+  try { localStorage.setItem(key, JSON.stringify({ position: scrollPosition(), updatedAt: new Date().toISOString() })) } catch { return }
   hasSavedDevicePosition.value = true
 }
 
@@ -89,6 +98,7 @@ function checkSavedDevicePosition() {
 
 function resetPositionState() {
   if (!import.meta.client) return
+  userScrolled = false
   restoreNotice.value = ''
   pendingRestorePosition = null
   checkSavedDevicePosition()
@@ -105,7 +115,7 @@ function mobileReader() {
 function scheduleChromeHide() {
   if (!mobileReader()) return
   if (chromeTimer) clearTimeout(chromeTimer)
-  chromeTimer = setTimeout(() => { readerChromeVisible.value = false }, 3000)
+  chromeTimer = setTimeout(() => { if (!document.activeElement?.closest('header, .reader-settings')) readerChromeVisible.value = false }, 3000)
 }
 
 function handleReaderTap(event: MouseEvent) {
@@ -158,6 +168,7 @@ async function inferChapterEntities() {
 function startDictionaryPolling() {
   if (dictionaryPoller) clearInterval(dictionaryPoller)
   dictionaryPoller = setInterval(async () => {
+    if (document.hidden) return
     await refresh()
     const status = data.value?.dictionary?.status || 'NOT_STARTED'
     if (!['COMPLETED', 'FAILED'].includes(status)) return
@@ -173,9 +184,10 @@ async function ensureArchived() {
   if (!data.value || data.value.source.paragraphs.length || archiveBusy.value) return
   archiveBusy.value = true; archiveError.value = ''
   try {
-    await $fetch('/api/downloads/twkan', { method: 'POST', body: { sourceNovelId: data.value.chapter.novel.sourceNovelId, sourceChapterIds: [data.value.chapter.sourceChapterId] } })
+    await $fetch(`/api/downloads/${encodeURIComponent(data.value.chapter.novel.sourceSite)}`, { method: 'POST', body: { sourceNovelId: data.value.chapter.novel.sourceNovelId, sourceChapterIds: [data.value.chapter.sourceChapterId] } })
     if (archivePoller) clearInterval(archivePoller)
     archivePoller = setInterval(async () => {
+      if (document.hidden) return
       await refresh()
       if (data.value?.source.paragraphs.length || data.value?.chapter.scrapeStatus === 'FAILED') {
         if (archivePoller) clearInterval(archivePoller)
@@ -191,7 +203,10 @@ async function ensureArchived() {
 }
 
 onMounted(() => {
-  const saved = JSON.parse(localStorage.getItem('inkrail-reader') || '{}')
+  let saved: any = {}
+  try { saved = JSON.parse(localStorage.getItem('inkrail-reader') || '{}') } catch { /* Ignore invalid device preferences. */ }
+  window.addEventListener('pagehide', saveDevicePosition)
+  for (const event of ['wheel', 'touchmove', 'keydown']) window.addEventListener(event, markScrollIntent, { passive: true })
   mode.value = saved.mode || (data.value?.translation.paragraphs.length ? 'translation' : 'source')
   theme.value = saved.theme || 'dark'; fontSize.value = saved.fontSize || 20; contentWidth.value = saved.contentWidth || 760
   resetPositionState()
@@ -201,7 +216,7 @@ onMounted(() => {
       readerChromeVisible.value = false
       if (chromeTimer) clearTimeout(chromeTimer)
     }
-    if (restoringScroll) return
+    if (restoringScroll || !userScrolled) return
     clearTimeout(localSaveTimer)
     localSaveTimer = setTimeout(saveDevicePosition, 150)
     clearTimeout(saveTimer)
@@ -212,7 +227,7 @@ onMounted(() => {
   window.addEventListener('scroll', onScroll, { passive: true })
   ensureArchived()
   if (['PENDING', 'RUNNING'].includes(data.value?.dictionary?.status || 'NOT_STARTED')) startDictionaryPolling()
-  onBeforeUnmount(() => { saveDevicePosition(); window.removeEventListener('scroll', onScroll); if (saveTimer) clearTimeout(saveTimer); if (localSaveTimer) clearTimeout(localSaveTimer); if (archivePoller) clearInterval(archivePoller); if (chromeTimer) clearTimeout(chromeTimer); if (dictionaryPoller) clearInterval(dictionaryPoller) })
+  onBeforeUnmount(() => { saveDevicePosition(); window.removeEventListener('pagehide', saveDevicePosition); for (const event of ['wheel', 'touchmove', 'keydown']) window.removeEventListener(event, markScrollIntent); window.removeEventListener('scroll', onScroll); if (saveTimer) clearTimeout(saveTimer); if (localSaveTimer) clearTimeout(localSaveTimer); if (archivePoller) clearInterval(archivePoller); if (chromeTimer) clearTimeout(chromeTimer); if (dictionaryPoller) clearInterval(dictionaryPoller) })
 })
 
 watch(() => data.value?.chapter.id, () => { ensureArchived(); resetPositionState() })
@@ -241,7 +256,7 @@ async function translateChapter() {
     const result: any = await $fetch('/api/translations/queue', { method: 'POST', body: { novelId: data.value.chapter.novelId, chapterIds: [data.value.chapter.id] } })
     translationNotice.value = result.queued ? 'Queued. Codex translation will start shortly.' : 'This chapter is already queued or translated.'
     await refresh()
-  } finally { translationBusy.value = false }
+  } catch (cause: any) { translationNotice.value = cause?.data?.statusMessage || 'Translation operation failed. Please retry.' } finally { translationBusy.value = false }
 }
 
 async function regenerateTranslation() {
@@ -266,7 +281,7 @@ async function cancelTranslation() {
     const result: any = await $fetch('/api/translations/cancel', { method: 'POST', body: { chapterIds: [data.value.chapter.id] } })
     translationNotice.value = result.cancellationRequested ? 'Stopping the active Codex translation…' : 'Translation removed from the queue.'
     await refresh()
-  } finally { translationBusy.value = false }
+  } catch (cause: any) { translationNotice.value = cause?.data?.statusMessage || 'Translation operation failed. Please retry.' } finally { translationBusy.value = false }
 }
 
 async function prioritizeTranslation() {
@@ -282,47 +297,48 @@ async function prioritizeTranslation() {
   } finally { translationBusy.value = false }
 }
 
-const canTranslate = computed(() => ['NOT_STARTED', 'FAILED', 'SOURCE_CHANGED'].includes(data.value?.translationStatus || ''))
+const canTranslate = computed(() => features.value?.translation && ['NOT_STARTED', 'FAILED', 'SOURCE_CHANGED'].includes(data.value?.translationStatus || ''))
 const canCancel = computed(() => ['QUEUED', 'TRANSLATING'].includes(data.value?.translationStatus || ''))
 const translationWarning = computed(() => data.value?.chapter.translations
   .find((item: any) => item.targetLanguage === data.value?.chapter.novel.targetLanguage)?.reviewNotes || '')
 </script>
 
 <template>
-  <div v-if="data" class="min-h-screen transition-colors" :class="palette" @click.capture="handleReaderTap">
-    <header class="sticky top-0 z-40 border-b border-current/10 bg-inherit/95 backdrop-blur-xl transition duration-200 sm:translate-y-0 sm:opacity-100" :class="readerChromeVisible ? 'translate-y-0 opacity-100' : 'pointer-events-none -translate-y-full opacity-0'">
-      <div class="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
+  <div v-if="data" class="reader-surface min-h-screen transition-colors" :class="palette" @click.capture="handleReaderTap">
+    <header @focusin="readerChromeVisible = true" class="sticky top-0 z-40 border-b border-current/10 bg-inherit backdrop-blur-xl transition duration-200 sm:translate-y-0 sm:opacity-100" :class="readerChromeVisible ? 'translate-y-0 opacity-100' : 'pointer-events-none -translate-y-full opacity-0'">
+      <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3">
         <NuxtLink :to="`/novels/${data.chapter.novel.slug}`" class="btn border-current/10 bg-transparent px-3">← <span class="mobile-hide">Directory</span></NuxtLink>
-        <div class="min-w-0 text-center"><div class="truncate text-sm font-semibold">{{ data.translation.title || data.source.title }}</div><div class="text-[10px] opacity-45">Chapter {{ data.chapter.position }} · {{ data.translationStatus.replaceAll('_', ' ') }}</div></div>
-        <div class="flex items-center gap-1 rounded-xl border border-current/10 p-1 text-xs">
-          <button v-for="option in ['translation','source','parallel']" :key="option" class="rounded-lg px-2.5 py-2 capitalize" :class="mode === option ? 'bg-current/10' : 'opacity-45'" :disabled="option !== 'source' && !data.translation.paragraphs.length" @click="mode = option as any">{{ option === 'translation' ? 'ID' : option === 'source' ? '中文' : 'A/B' }}</button>
+        <div class="min-w-0 text-center"><div class="truncate text-sm font-semibold">{{ data.translation.title || data.source.title }}</div><div class="text-[10px] opacity-75">Chapter {{ data.chapter.position }} · {{ data.translationStatus.replaceAll('_', ' ') }}</div></div>
+        <div class="flex w-full justify-center gap-1 rounded-xl sm:w-auto border border-current/10 p-1 text-xs">
+          <button v-for="option in ['translation','source','parallel']" :key="option" class="rounded-lg px-2.5 py-2 capitalize" :class="mode === option ? 'bg-current/10' : 'opacity-75'" :disabled="option !== 'source' && !data.translation.paragraphs.length" @click="mode = option as any">{{ option === 'translation' ? data.chapter.novel.targetLanguage : option === 'source' ? 'Original' : 'Side by side' }}</button>
         </div>
       </div>
     </header>
 
     <main class="mx-auto px-5 pb-28 pt-12" :style="{ maxWidth: `${mode === 'parallel' ? Math.min(contentWidth * 1.7, 1200) : contentWidth}px` }">
       <div class="mb-12 text-center">
-        <p class="mb-3 text-xs uppercase tracking-[.2em] opacity-40">{{ data.chapter.novel.titleTranslated || data.chapter.novel.titleOriginal }}</p>
+        <p class="mb-3 text-xs uppercase tracking-[.2em] opacity-75">{{ data.chapter.novel.titleTranslated || data.chapter.novel.titleOriginal }}</p>
         <h1 class="font-serif text-3xl font-semibold leading-tight md:text-4xl">{{ mode === 'source' ? data.source.title : data.translation.title || data.source.title }}</h1>
-        <p v-if="mode !== 'source' && data.translation.title" class="mt-3 font-serif text-sm opacity-40">{{ data.source.title }}</p>
+        <p v-if="mode !== 'source' && data.translation.title" class="mt-3 font-serif text-sm opacity-75">{{ data.source.title }}</p>
         <div class="mt-6 flex flex-wrap items-center justify-center gap-3">
           <button v-if="canTranslate" class="btn border-current/10 bg-transparent" :disabled="translationBusy" @click="translateChapter">{{ translationBusy ? 'Queueing…' : 'Translate this chapter' }}</button>
           <template v-else-if="canCancel">
             <button v-if="data.translationStatus === 'QUEUED'" class="btn border-current/10 bg-transparent" :disabled="translationBusy || Boolean(data.translationJob?.priority)" @click="prioritizeTranslation">{{ data.translationJob?.priority ? 'Prioritized' : 'Prioritize translation' }}</button>
             <button class="btn border-current/10 bg-transparent" :disabled="translationBusy" @click="cancelTranslation">{{ data.translationStatus === 'TRANSLATING' ? 'Cancel active translation' : 'Remove from queue' }}</button>
           </template>
-          <span v-if="data.translationStatus === 'TRANSLATING'" class="text-xs opacity-45">Codex CLI is working now.</span>
-          <button class="btn border-current/10 bg-transparent" :disabled="dictionaryBusy" @click="inferChapterEntities">{{ dictionaryBusy ? 'Queueing…' : 'Scan names & places' }}</button>
+          <span v-if="data.translationStatus === 'TRANSLATING'" class="text-xs opacity-75">Codex CLI is working now.</span>
+          <button v-if="features?.translation" class="btn border-current/10 bg-transparent" :disabled="dictionaryBusy" @click="inferChapterEntities">{{ dictionaryBusy ? 'Queueing…' : 'Scan names & places' }}</button>
         </div>
-        <p v-if="translationNotice" class="mt-3 text-xs opacity-55">{{ translationNotice }}</p>
-        <p v-if="dictionaryNotice" class="mt-3 text-xs opacity-55">{{ dictionaryNotice }}</p>
+        <p v-if="!features?.translation" class="mt-3 text-sm">Translation and name scanning are disabled. To enable it, open tray Settings → Edit configuration, set INKRAIL_ENABLE_TRANSLATION=true, then apply configuration and restart.</p>
+        <p v-if="translationNotice" class="mt-3 text-xs opacity-75">{{ translationNotice }}</p>
+        <p v-if="dictionaryNotice" class="mt-3 text-xs opacity-75">{{ dictionaryNotice }}</p>
         <p v-if="translationWarning" class="mx-auto mt-3 max-w-2xl rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-xs text-amber-300">
           Translation kept with a review warning: {{ translationWarning }}
         </p>
       </div>
 
       <article class="font-serif" :style="{ fontSize: `${fontSize}px`, lineHeight: 1.9 }">
-        <div v-if="!data.source.paragraphs.length" class="rounded-2xl border border-current/10 p-6 text-center text-sm opacity-55"><p>{{ archiveError || (archiveBusy ? 'Downloading this chapter automatically…' : 'Preparing chapter download…') }}</p><button v-if="archiveError" class="btn mt-4 border-current/10 bg-transparent" @click="ensureArchived">Retry</button></div>
+        <div v-if="!data.source.paragraphs.length" class="rounded-2xl border border-current/10 p-6 text-center text-sm opacity-75"><p>{{ archiveError || (archiveBusy ? 'Downloading this chapter automatically…' : 'Preparing chapter download…') }}</p><button v-if="archiveError" class="btn mt-4 border-current/10 bg-transparent" @click="ensureArchived">Retry</button></div>
         <template v-if="mode === 'parallel'">
           <div v-for="(pair, index) in pairs" :key="index" class="grid gap-4 border-b border-current/10 py-6 md:grid-cols-2 md:gap-10">
             <p class="m-0 opacity-60"><EntityText :text="pair.source" :entities="data.entities || []" @select="openEntity" /></p><p class="m-0"><EntityText :text="pair.translation || '—'" :entities="data.entities || []" @select="openEntity" /></p>
@@ -340,18 +356,18 @@ const translationWarning = computed(() => data.value?.chapter.translations
 
       <div class="mt-16 flex items-center justify-between border-t border-current/10 pt-8">
         <NuxtLink v-if="data.previous" :to="`/novels/${data.chapter.novel.slug}/chapters/${data.previous.id}`" class="btn border-current/10 bg-transparent">← Previous</NuxtLink><span v-else />
-        <button v-if="data.translationStatus === 'TRANSLATED'" class="text-xs opacity-50 hover:opacity-100" @click="approve">Mark approved</button>
+        <button v-if="data.translationStatus === 'TRANSLATED'" class="text-xs opacity-75 hover:opacity-100" @click="approve">Mark approved</button>
         <NuxtLink v-if="data.next" :to="`/novels/${data.chapter.novel.slug}/chapters/${data.next.id}`" class="btn border-current/10 bg-transparent">Next →</NuxtLink>
       </div>
     </main>
 
-    <p v-if="restoreNotice" class="fixed bottom-20 left-1/2 z-50 w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-xl border border-current/10 bg-inherit/95 px-4 py-2 text-center text-xs shadow-xl backdrop-blur-xl">{{ restoreNotice }}</p>
+    <p v-if="restoreNotice" class="fixed bottom-20 left-1/2 z-50 w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-xl border border-current/10 bg-inherit px-4 py-2 text-center text-xs shadow-xl backdrop-blur-xl">{{ restoreNotice }}</p>
 
-    <div class="fixed bottom-4 left-4 z-30 flex max-w-[calc(100vw-2rem)] items-center gap-2 rounded-2xl border border-current/10 bg-inherit/95 p-2 text-xs shadow-2xl backdrop-blur-xl sm:left-1/2 sm:-translate-x-1/2">
-      <button class="flex h-8 items-center gap-1.5 rounded-lg border border-current/10 px-2.5" :class="hasSavedDevicePosition ? '' : 'opacity-45'" aria-label="Restore saved reading position" title="Restore saved reading position" @click="restoreDevicePosition"><span aria-hidden="true">↶</span><span class="hidden sm:inline">Restore</span></button>
-      <select v-model="theme" class="rounded-lg border border-current/10 bg-transparent px-2 py-2"><option value="dark">Dark</option><option value="sepia">Sepia</option><option value="light">Light</option></select>
+    <div class="reader-settings fixed bottom-4 left-4 z-30 flex max-w-[calc(100vw-2rem)] flex-wrap items-center gap-2 rounded-2xl border border-current/10 bg-inherit p-2 text-xs shadow-2xl backdrop-blur-xl sm:left-1/2 sm:-translate-x-1/2">
+      <button class="flex h-8 items-center gap-1.5 rounded-lg border border-current/10 px-2.5" :class="hasSavedDevicePosition ? '' : 'opacity-75'" aria-label="Restore saved reading position" title="Restore saved reading position" @click="restoreDevicePosition"><span aria-hidden="true">↶</span><span class="hidden sm:inline">Restore</span></button>
+      <select aria-label="Reading theme" v-model="theme" class="rounded-lg border border-current/10 bg-transparent px-2 py-2"><option value="dark">Dark</option><option value="sepia">Sepia</option><option value="light">Light</option></select>
       <button class="h-8 w-8 rounded-lg border border-current/10" @click="fontSize = Math.max(15, fontSize - 1)">A−</button>
-      <span class="w-7 text-center opacity-45">{{ fontSize }}</span>
+      <span class="w-7 text-center opacity-75">{{ fontSize }}</span>
       <button class="h-8 w-8 rounded-lg border border-current/10" @click="fontSize = Math.min(30, fontSize + 1)">A+</button>
     </div>
 
@@ -359,27 +375,29 @@ const translationWarning = computed(() => data.value?.chapter.translations
       <button type="button" class="fixed inset-0 z-[70] bg-black/55 backdrop-blur-[2px] sm:hidden" aria-label="Close reference" @click="closeEntity" />
       <aside class="fixed inset-x-3 bottom-3 z-[80] max-h-[78vh] overflow-y-auto rounded-3xl border border-current/15 bg-inherit shadow-2xl sm:inset-x-auto sm:bottom-auto sm:max-h-[min(680px,86vh)] sm:rounded-2xl" :style="entityPopoverStyle" role="dialog" aria-live="polite">
         <header class="relative isolate overflow-hidden p-5" :class="selectedEntity.avatarUrl ? 'text-white' : ''">
-          <div v-if="selectedEntity.avatarUrl" class="absolute inset-0 -z-20 scale-110 bg-cover bg-center opacity-45 blur-xl" :style="{ backgroundImage: `url(${selectedEntity.avatarUrl})` }" />
+          <div v-if="selectedEntity.avatarUrl" class="absolute inset-0 -z-20 scale-110 bg-cover bg-center opacity-75 blur-xl" :style="{ backgroundImage: `url(${selectedEntity.avatarUrl})` }" />
           <div v-if="selectedEntity.avatarUrl" class="absolute inset-0 -z-10 bg-gradient-to-r from-black/85 via-black/65 to-black/30" />
-          <div class="flex items-start justify-between gap-4"><div class="flex min-w-0 items-center gap-3"><img v-if="selectedEntity.avatarUrl" :src="selectedEntity.avatarUrl" :alt="selectedEntity.translatedName || selectedEntity.originalName" class="h-16 w-16 shrink-0 rounded-2xl border border-white/15 object-cover shadow-xl" /><div class="min-w-0"><span class="text-[10px] font-semibold uppercase tracking-[.18em] opacity-55">{{ selectedEntity.type === 'CHARACTER' ? 'Character' : 'Place' }}</span><h2 class="mt-1 truncate font-serif text-2xl font-semibold">{{ selectedEntity.translatedName || selectedEntity.originalName }}</h2><p v-if="selectedEntity.translatedName" class="mt-1 text-sm opacity-55">{{ selectedEntity.originalName }}</p></div></div><button type="button" class="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-current/15 bg-black/10 opacity-70 backdrop-blur hover:opacity-100" aria-label="Close reference" @click="closeEntity">✕</button></div>
+          <div class="flex items-start justify-between gap-4"><div class="flex min-w-0 items-center gap-3"><img v-if="selectedEntity.avatarUrl" :src="selectedEntity.avatarUrl" :alt="selectedEntity.translatedName || selectedEntity.originalName" class="h-16 w-16 shrink-0 rounded-2xl border border-white/15 object-cover shadow-xl" /><div class="min-w-0"><span class="text-[10px] font-semibold uppercase tracking-[.18em] opacity-75">{{ selectedEntity.type === 'CHARACTER' ? 'Character' : 'Place' }}</span><h2 class="mt-1 truncate font-serif text-2xl font-semibold">{{ selectedEntity.translatedName || selectedEntity.originalName }}</h2><p v-if="selectedEntity.translatedName" class="mt-1 text-sm opacity-75">{{ selectedEntity.originalName }}</p></div></div><button type="button" class="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-current/15 bg-black/10 opacity-70 backdrop-blur hover:opacity-100" aria-label="Close reference" @click="closeEntity">✕</button></div>
           <button v-if="selectedEntity.fullBodyImageUrl" type="button" class="mt-4 rounded-full border border-current/15 bg-black/15 px-3 py-1.5 text-[11px] font-semibold backdrop-blur" :aria-expanded="fullBodyOpen" @click="fullBodyOpen = !fullBodyOpen">{{ fullBodyOpen ? 'Hide full body' : 'View full body' }}</button>
         </header>
         <div v-if="fullBodyOpen && selectedEntity.fullBodyImageUrl" class="border-y border-current/10 bg-black/15 p-3"><img :src="selectedEntity.fullBodyImageUrl" :alt="`Full-body view of ${selectedEntity.translatedName || selectedEntity.originalName}`" class="mx-auto max-h-[54vh] w-auto rounded-2xl object-contain shadow-2xl" /></div>
         <div class="p-5 pt-0">
         <div v-if="selectedEntity.firstIntroduction" class="mt-5 rounded-xl border border-current/10 p-3.5">
-          <p class="text-[10px] font-semibold uppercase tracking-[.14em] opacity-40">{{ selectedEntity.firstIntroduction.chapter?.id === selectedEntity.lastAppearanceBeforeChapter?.chapter?.id ? 'First introduction · latest prior appearance' : 'First introduction' }}</p>
+          <p class="text-[10px] font-semibold uppercase tracking-[.14em] opacity-75">{{ selectedEntity.firstIntroduction.chapter?.id === selectedEntity.lastAppearanceBeforeChapter?.chapter?.id ? 'First introduction · latest prior appearance' : 'First introduction' }}</p>
           <p class="mt-2 text-sm leading-6 opacity-70">{{ selectedEntity.firstIntroduction.description }}</p>
-          <p v-if="selectedEntity.firstIntroduction.chapter" class="mt-2 text-[11px] opacity-40">Chapter {{ selectedEntity.firstIntroduction.chapter.position }} · {{ selectedEntity.firstIntroduction.chapter.titleTranslated || selectedEntity.firstIntroduction.chapter.titleOriginal }}</p>
+          <p v-if="selectedEntity.firstIntroduction.chapter" class="mt-2 text-[11px] opacity-75">Chapter {{ selectedEntity.firstIntroduction.chapter.position }} · {{ selectedEntity.firstIntroduction.chapter.titleTranslated || selectedEntity.firstIntroduction.chapter.titleOriginal }}</p>
         </div>
         <div v-if="selectedEntity.lastAppearanceBeforeChapter && selectedEntity.lastAppearanceBeforeChapter.chapter?.id !== selectedEntity.firstIntroduction?.chapter?.id" class="mt-3 rounded-xl border border-current/10 p-3.5">
-          <p class="text-[10px] font-semibold uppercase tracking-[.14em] opacity-40">Latest appearance before this chapter</p>
+          <p class="text-[10px] font-semibold uppercase tracking-[.14em] opacity-75">Latest appearance before this chapter</p>
           <p class="mt-2 text-sm leading-6 opacity-70">{{ selectedEntity.lastAppearanceBeforeChapter.description }}</p>
-          <p v-if="selectedEntity.lastAppearanceBeforeChapter.chapter" class="mt-2 text-[11px] opacity-40">Chapter {{ selectedEntity.lastAppearanceBeforeChapter.chapter.position }} · {{ selectedEntity.lastAppearanceBeforeChapter.chapter.titleTranslated || selectedEntity.lastAppearanceBeforeChapter.chapter.titleOriginal }}</p>
+          <p v-if="selectedEntity.lastAppearanceBeforeChapter.chapter" class="mt-2 text-[11px] opacity-75">Chapter {{ selectedEntity.lastAppearanceBeforeChapter.chapter.position }} · {{ selectedEntity.lastAppearanceBeforeChapter.chapter.titleTranslated || selectedEntity.lastAppearanceBeforeChapter.chapter.titleOriginal }}</p>
         </div>
-        <p v-if="selectedEntity.aliases?.length > 2" class="mt-4 text-xs leading-5 opacity-40">Also known as {{ selectedEntity.aliases.filter((alias: string) => ![selectedEntity.originalName, selectedEntity.translatedName].includes(alias)).join(', ') }}</p>
-        <p class="mt-3 text-[10px] uppercase tracking-[.12em] opacity-30">Context ends before this chapter</p>
+        <p v-if="selectedEntity.aliases?.length > 2" class="mt-4 text-xs leading-5 opacity-75">Also known as {{ selectedEntity.aliases.filter((alias: string) => ![selectedEntity.originalName, selectedEntity.translatedName].includes(alias)).join(', ') }}</p>
+        <p class="mt-3 text-[10px] uppercase tracking-[.12em] opacity-75">Context ends before this chapter</p>
         </div>
       </aside>
     </template>
   </div>
+  <p v-else-if="pending" role="status" class="p-8">Opening chapter…</p>
+  <PageError v-else :error="error" :back-to="`/novels/${route.params.slug}`" @retry="refresh()" />
 </template>

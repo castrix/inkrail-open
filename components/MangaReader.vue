@@ -8,6 +8,7 @@ const mode = ref<ReaderMode>(props.defaultMode), direction = ref<'rtl' | 'ltr'>(
 const currentIndex = ref(Math.max(0, props.pages.findIndex(page => page.position === Number(route.query.page || 1))))
 const currentPage = computed(() => props.pages[currentIndex.value])
 const displayedPage = shallowRef<ReaderPage | undefined>(currentPage.value)
+const imageRevision = ref(0)
 const imageLoading = ref(false), imageError = ref(''), chromeVisible = ref(true)
 const pageNumber = computed(() => currentIndex.value + 1)
 const sliderPage = ref(pageNumber.value)
@@ -31,7 +32,7 @@ function updateUrl() {
 function keepChromeOpen() { chromeVisible.value = true; if (chromeTimer) clearTimeout(chromeTimer) }
 function scheduleChromeHide() {
   if (chromeTimer) clearTimeout(chromeTimer)
-  if (mode.value === 'manga') chromeTimer = setTimeout(() => { chromeVisible.value = false }, 2600)
+  if (mode.value === 'manga') chromeTimer = setTimeout(() => { if (!document.activeElement?.closest('header,footer')) chromeVisible.value = false }, 2600)
 }
 async function loadImage(url: string, signal: AbortSignal): Promise<HTMLImageElement> {
   if (url !== currentPage.value?.imageUrl && !url.startsWith('/api/manga/pages/')) {
@@ -78,7 +79,7 @@ function schedulePreload() {
 function retryImage() { imageError.value = ''; imageLoading.value = true; if (currentPage.value) queue?.retry(currentPage.value.imageUrl) }
 function setPage(index: number) {
   if (!props.pages.length) return
-  currentIndex.value = Math.max(0, Math.min(props.pages.length - 1, index)); sliderPage.value = pageNumber.value
+  currentIndex.value = Math.max(0, Math.min(props.pages.length - 1, Number.isFinite(index) ? Math.trunc(index) : 0)); sliderPage.value = pageNumber.value
   updateUrl(); scheduleChromeHide()
   if (mode.value === 'webtoon') elements.get(currentIndex.value)?.scrollIntoView({ block: 'start' })
   else schedulePreload()
@@ -88,7 +89,7 @@ function previousPage() { setPage(currentIndex.value - 1) }
 function leftZone() { if (Date.now() < ignoreClickUntil) return; direction.value === 'rtl' ? nextPage() : previousPage() }
 function rightZone() { if (Date.now() < ignoreClickUntil) return; direction.value === 'rtl' ? previousPage() : nextPage() }
 function toggleChrome() { chromeVisible.value = !chromeVisible.value; if (chromeVisible.value) scheduleChromeHide() }
-function toggleFullscreen() { if (document.fullscreenElement) void document.exitFullscreen(); else void document.documentElement.requestFullscreen() }
+async function toggleFullscreen() { try { if (document.fullscreenElement) await document.exitFullscreen(); else if (document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen() } catch { /* Browser may deny fullscreen; reading remains available. */ } }
 function registerPage(index: number, element: any) {
   const previous = elements.get(index)
   if (previous === element) return
@@ -119,6 +120,7 @@ function setupWebtoon() {
   elements.get(currentIndex.value)?.scrollIntoView({ block: 'start' })
 }
 function onKey(event: KeyboardEvent) {
+  if (event.key === 'Tab' || event.key === 'Escape') { keepChromeOpen(); return }
   if ((event.target as HTMLElement)?.matches('input,select,textarea,button') || mode.value !== 'manga') return
   if (['ArrowLeft','ArrowRight',' ','Enter'].includes(event.key)) event.preventDefault()
   if (event.key === 'ArrowLeft') leftZone(); else if (event.key === 'ArrowRight') rightZone(); else if (event.key === ' ' || event.key === 'Enter') toggleChrome()
@@ -138,7 +140,7 @@ onMounted(() => {
     if (url !== currentPage.value?.imageUrl) return
     imageLoading.value = false
     if (error) imageError.value = 'Could not load this page.'
-    else if (image) { displayedPage.value = currentPage.value; imageError.value = '' }
+    else if (image) { displayedPage.value = currentPage.value; imageRevision.value++; imageLoading.value = true }
   }, 1, 6)
   try {
     const saved = JSON.parse(localStorage.getItem('inkrail-manga-reader') || '{}')
@@ -163,10 +165,10 @@ onBeforeUnmount(() => { mounted = false; queue?.dispose(); observer?.disconnect(
 </script>
 
 <template>
-  <div class="min-h-screen select-none bg-black text-white" @touchstart.passive="touchStartX = $event.touches[0]?.clientX || 0; touchStartY = $event.touches[0]?.clientY || 0" @touchend.passive="finishSwipe">
-    <header class="fixed inset-x-0 top-0 z-50 flex items-center justify-between gap-3 border-b border-white/10 bg-black/80 px-3 py-2 backdrop-blur-xl transition duration-200" :class="chromeVisible ? 'translate-y-0 opacity-100' : 'pointer-events-none -translate-y-full opacity-0'">
+  <div class="reader-surface min-h-screen select-none bg-black text-white" @touchstart.passive="touchStartX = $event.touches[0]?.clientX || 0; touchStartY = $event.touches[0]?.clientY || 0" @touchend.passive="finishSwipe">
+    <header @focusin="keepChromeOpen" @focusout="scheduleChromeHide" class="fixed inset-x-0 top-0 z-50 flex items-center justify-between gap-3 border-b border-white/10 bg-black/80 px-3 py-2 backdrop-blur-xl transition duration-200" :class="chromeVisible ? 'translate-y-0 opacity-100' : 'pointer-events-none -translate-y-full opacity-0'">
       <NuxtLink :to="backTo" class="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold">← Back</NuxtLink>
-      <div class="min-w-0 flex-1 text-center"><div class="truncate text-xs font-semibold sm:text-sm">{{ title }}</div><div class="mt-0.5 text-[10px] text-white/40">{{ pageNumber }} / {{ pages.length }} <span v-if="currentPage?.archived" class="text-[#9fd6b0]">· Local</span><span v-else-if="currentPage?.proxied">· Source stream</span><span v-else>· Direct stream</span></div></div>
+      <div class="min-w-0 flex-1 text-center"><div class="truncate text-xs font-semibold sm:text-sm">{{ title }}</div><div class="mt-0.5 text-[10px] text-muted">{{ pageNumber }} / {{ pages.length }} <span v-if="currentPage?.archived" class="text-[#9fd6b0]">· Local</span><span v-else-if="currentPage?.proxied">· Source stream</span><span v-else>· Direct stream</span></div></div>
       <button class="grid h-9 w-9 place-items-center rounded-lg border border-white/10 text-sm" aria-label="Toggle fullscreen" @click="toggleFullscreen">⛶</button>
     </header>
 
@@ -177,32 +179,32 @@ onBeforeUnmount(() => { mounted = false; queue?.dispose(); observer?.disconnect(
       </div>
     </main>
 
-    <main v-else-if="pages.length" class="relative grid min-h-screen place-items-center overflow-hidden px-1 py-14 sm:px-6">
-      <img v-if="displayedPage" :key="displayedPage.sourcePageId" :src="displayedPage.imageUrl" :alt="`Page ${displayedPage.position}`" decoding="async" fetchpriority="high" referrerpolicy="no-referrer" class="block object-contain" :class="fit === 'height' ? 'max-h-[calc(100vh-7rem)] max-w-full' : 'h-auto w-full max-w-5xl'" />
+    <main v-else-if="pages.length" class="relative grid min-h-screen place-items-center overflow-hidden px-1 pb-48 pt-20 sm:px-6">
+      <img v-if="displayedPage" :key="`${displayedPage.sourcePageId}-${imageRevision}`" @load="imageLoading = false; imageError = ''" @error="imageLoading = false; imageError = 'Could not load this page.'" :src="displayedPage.imageUrl" :alt="`Page ${displayedPage.position}`" decoding="async" fetchpriority="high" referrerpolicy="no-referrer" class="block object-contain" :class="fit === 'height' ? 'reader-image max-w-full' : 'h-auto w-full max-w-5xl'" />
       <div v-if="imageLoading || imageError" role="status" class="absolute left-1/2 top-16 z-20 -translate-x-1/2 rounded-xl bg-black/80 px-4 py-3 text-sm">{{ imageError || `Loading page ${pageNumber}…` }} <button v-if="imageError" class="ml-2 text-gold underline" @click="retryImage">Retry</button></div>
       <button class="absolute inset-y-14 left-0 w-[34%] cursor-w-resize bg-transparent" :aria-label="direction === 'rtl' ? 'Next page' : 'Previous page'" @click="leftZone"><span class="sr-only">{{ direction === 'rtl' ? 'Next page' : 'Previous page' }}</span></button>
       <button class="absolute inset-y-14 left-[34%] w-[32%] bg-transparent" aria-label="Toggle reader controls" @click="toggleChrome"><span class="sr-only">Toggle controls</span></button>
       <button class="absolute inset-y-14 right-0 w-[34%] cursor-e-resize bg-transparent" :aria-label="direction === 'rtl' ? 'Previous page' : 'Next page'" @click="rightZone"><span class="sr-only">{{ direction === 'rtl' ? 'Previous page' : 'Next page' }}</span></button>
     </main>
 
-    <main v-else class="grid min-h-screen place-items-center px-5 text-center text-sm text-white/45">Opening manga…</main>
+    <main v-else class="grid min-h-screen place-items-center px-5 text-center text-sm text-muted">Opening manga…</main>
 
-    <footer class="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-black/80 px-3 py-2 backdrop-blur-xl transition duration-200" :class="chromeVisible ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-full opacity-0'">
+    <footer @focusin="keepChromeOpen" @focusout="scheduleChromeHide" class="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-black/80 px-3 py-2 backdrop-blur-xl transition duration-200" :class="chromeVisible ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-full opacity-0'">
       <div class="mx-auto flex max-w-5xl flex-wrap items-center gap-2">
-        <div class="flex rounded-lg border border-white/10 p-0.5 text-[10px]"><button class="rounded-md px-2 py-1.5" :class="mode === 'manga' ? 'bg-white/15' : 'text-white/40'" @click="mode = 'manga'">Manga</button><button class="rounded-md px-2 py-1.5" :class="mode === 'webtoon' ? 'bg-white/15' : 'text-white/40'" @click="mode = 'webtoon'">Webtoon</button></div>
+        <div class="flex rounded-lg border border-white/10 p-0.5 text-[10px]"><button class="rounded-md px-2 py-1.5" :class="mode === 'manga' ? 'bg-white/15' : 'text-muted'" @click="mode = 'manga'">Manga</button><button class="rounded-md px-2 py-1.5" :class="mode === 'webtoon' ? 'bg-white/15' : 'text-muted'" @click="mode = 'webtoon'">Webtoon</button></div>
         <template v-if="mode === 'manga'">
           <label class="sr-only" for="manga-reading-direction">Reading direction</label>
           <select id="manga-reading-direction" v-model="direction" class="rounded-lg border border-white/10 bg-black px-2 py-2 text-xs" @focus="keepChromeOpen" @blur="scheduleChromeHide">
             <option value="ltr">Left → right</option><option value="rtl">Right → left</option>
           </select>
-          <button class="hidden rounded-lg border border-white/10 px-2 py-2 text-[10px] sm:block" @click="fit = fit === 'height' ? 'width' : 'height'">Fit {{ fit === 'height' ? 'height' : 'width' }}</button>
+          <button class="rounded-lg border border-white/10 px-2 py-2 text-xs" @click="fit = fit === 'height' ? 'width' : 'height'">Fit {{ fit === 'height' ? 'height' : 'width' }}</button>
         </template>
         <div class="flex min-w-0 basis-full items-center gap-2 sm:flex-1 sm:basis-0">
         <input v-model.number="sliderPage" type="range" @change="setPage(sliderPage - 1)" min="1" :max="Math.max(1, pages.length)" class="min-w-0 flex-1 accent-[#c9a96e]" aria-label="Current manga page" />
-        <span class="w-14 text-right text-[10px] text-white/55">{{ pageNumber }}/{{ pages.length }}</span>
+        <label class="flex items-center gap-2 text-xs"><span class="sr-only">Go to page</span><input :value="pageNumber" type="number" min="1" :max="pages.length" class="w-16 rounded-lg border border-white/20 bg-black px-2" @change="setPage(Number(($event.target as HTMLInputElement).value) - 1)" /> / {{ pages.length }}</label>
         </div>
       </div>
-      <p v-if="mode === 'manga'" class="mx-auto mt-1 max-w-5xl text-[10px] text-white/40">{{ direction === 'ltr' ? 'Next page: tap right or swipe left' : 'Next page: tap left or swipe right' }}</p>
+      <p v-if="mode === 'manga'" class="mx-auto mt-1 max-w-5xl text-[10px] text-muted">{{ direction === 'ltr' ? 'Next page: tap right or swipe left' : 'Next page: tap left or swipe right' }}</p>
     </footer>
   </div>
 </template>

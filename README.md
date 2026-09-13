@@ -25,7 +25,7 @@ Keep the full checkout and production dependencies when running: the source runn
 
 ## Install sources
 
-Use the [public extension import guide](https://github.com/castrix/inkrail-sources/blob/main/docs/importing.md) for MangaDex and TWKAN. In **Extensions > Add repository**, enter:
+Use the [public extension import guide](https://github.com/castrix/inkrail-sources/blob/main/docs/importing.md) for MangaDex and TWKAN. In **Extensions > Add repository**, choose **Use public repository** to fill the URL and fingerprint, or enter them manually:
 
 - **Repository index URL:** `https://raw.githubusercontent.com/castrix/inkrail-sources/main/repository/index.json`
 - **Publisher SHA-256 fingerprint:** `cfc683ef1fc8e8504bbdb899ba839116eb6deb120b7aa07e18ca91bf1f624436`
@@ -42,7 +42,7 @@ Downloads and reading progress remain available after disabling or removing a so
 
 ## Optional features
 
-Translation and character tools require a separately installed and authenticated Codex CLI. Basic browsing, downloading, and reading do not. Enable translation workers with `INKRAIL_ENABLE_TRANSLATION=true`; choose the language and model in `.env`. The dictionary still scans only chapters needed for requested translations. Existing scheduling uses the Asia/Jakarta timezone, clearly shown by the schedule UI.
+Translation and character tools require a separately installed and authenticated Codex CLI. Basic browsing, downloading, and reading do not. Enable translation workers with `INKRAIL_ENABLE_TRANSLATION=true`; choose the language and model in `.env`. Unavailable translation/character actions are disabled in the UI and rejected by the API. The dictionary still scans only chapters needed for requested translations. New schedules use the browser’s timezone. Change the IANA timezone and daily time in **Schedules**; existing schedules retain their saved timezone (Asia/Jakarta for older entries). Missing daylight-saving times run at the next valid minute. Schedules only queue translation when translation is enabled.
 
 App discovery and Tailscale helpers are optional host integrations. Browser-based sources may need Playwright Chromium:
 

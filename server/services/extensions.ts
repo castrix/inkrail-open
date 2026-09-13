@@ -23,7 +23,7 @@ export async function invokeSource(source: string, method: string, params: any =
   if (process.env.INKRAIL_CORE_URL) return coreCall(method, { source, params })
   try { return await extensionManager().invoke(source, method, params) }
   catch (error: any) {
-    throw Object.assign(error, { statusCode: error.code === 'SOURCE_UNAVAILABLE' ? 503 : error.statusCode || 502 })
+    throw createError({ statusCode: error.code === 'SOURCE_UNAVAILABLE' ? 503 : error.statusCode || 502, statusMessage: error.code === 'SOURCE_UNAVAILABLE' ? 'Source unavailable' : 'Source request failed', data: { code: error.code || 'SOURCE_REQUEST_FAILED', message: error.message || 'The source did not respond. Check your connection and retry.' } })
   }
 }
 export async function sourceManifest(id: string): Promise<any> {

@@ -24,6 +24,8 @@ await Promise.all([ready, librariesRequest])
 // SSR watchers do not rerun after async data settles; commit the first page before rendering.
 if (!response.value && ready.data.value) response.value = ready.data.value
 if (ready.error.value) fetchError.value = 'Could not open your library. Please retry.'
+const filtersOpen = ref(false)
+const removeTarget = ref<any>(null)
 const creating = ref(false)
 const newLibraryName = ref('')
 const libraryError = ref('')
@@ -123,6 +125,7 @@ async function addLibrary() {
 
 async function removeFromLibrary(novel: any) {
   if (removingId.value) return
+  if (removeTarget.value?.id !== novel.id) { removeTarget.value = novel; return }
   removingId.value = novel.id
   libraryError.value = ''
   try {
@@ -132,7 +135,7 @@ async function removeFromLibrary(novel: any) {
     })
     await Promise.all([refreshLibrary(), refreshLibraries()])
   } catch (cause: any) { libraryError.value = cause?.data?.statusMessage || 'Could not remove this bookmark.' }
-  finally { removingId.value = '' }
+  finally { removingId.value = ''; removeTarget.value = null }
 }
 
 function openMove(novel: any) {
@@ -156,60 +159,53 @@ async function moveBookmark() {
 </script>
 
 <template>
-  <div class="mx-auto max-w-7xl px-5 pb-28 pt-10 md:pb-32 md:pt-14">
-    <section class="mb-9 grid gap-7 md:grid-cols-[1fr_auto] md:items-end">
-      <div><p class="mb-3 text-xs font-semibold uppercase tracking-[.24em] text-gold/80">Your collection</p><h1 class="max-w-3xl font-serif text-4xl font-semibold leading-tight md:text-6xl">Library</h1><p class="mt-4 max-w-2xl text-sm leading-7 text-white/45">Bookmarks stay lightweight. Adult titles appear only inside their selected library, never in All.</p></div>
-      <NuxtLink to="/sources" class="btn btn-primary h-fit">＋ Browse sources</NuxtLink>
-    </section>
+  <div class="mx-auto max-w-7xl px-5 pb-28 pt-5 md:pb-32 md:pt-8">
+    <section class="mb-5 flex flex-wrap items-center justify-between gap-3"><h1 class="font-serif text-3xl font-semibold sm:text-4xl">Library</h1><NuxtLink to="/sources" class="btn btn-primary">＋ Browse</NuxtLink></section>
 
     <section class="mb-6 flex gap-2 overflow-x-auto border-b border-white/10 pb-3">
-      <button class="whitespace-nowrap rounded-xl px-4 py-2 text-sm" :class="activeLibraryId === 'all' ? 'bg-gold font-semibold text-ink' : 'bg-white/5 text-white/50'" @click="selectLibrary('all')">All <span class="ml-1 opacity-60">{{ response?.allCount ?? "…" }}</span></button>
-      <button v-for="library in libraries" :key="library.id" class="whitespace-nowrap rounded-xl px-4 py-2 text-sm" :class="activeLibraryId === library.id ? 'bg-gold font-semibold text-ink' : 'bg-white/5 text-white/50'" @click="selectLibrary(library.id)">{{ library.name }} <span class="ml-1 opacity-60">{{ library._count.novels }}</span></button>
-      <button class="whitespace-nowrap rounded-xl border border-dashed border-white/15 px-4 py-2 text-sm text-white/45 hover:border-gold/50 hover:text-white" @click="creating = !creating">＋ Library</button>
+      <button class="whitespace-nowrap rounded-xl px-4 py-2 text-sm" :class="activeLibraryId === 'all' ? 'bg-gold font-semibold text-ink' : 'bg-white/5 text-muted'" @click="selectLibrary('all')">All <span class="ml-1 opacity-60">{{ response?.allCount ?? "…" }}</span></button>
+      <button v-for="library in libraries" :key="library.id" class="whitespace-nowrap rounded-xl px-4 py-2 text-sm" :class="activeLibraryId === library.id ? 'bg-gold font-semibold text-ink' : 'bg-white/5 text-muted'" @click="selectLibrary(library.id)">{{ library.name }} <span class="ml-1 opacity-60">{{ library._count.novels }}</span></button>
+      <button class="whitespace-nowrap rounded-xl border border-dashed border-white/15 px-4 py-2 text-sm text-muted hover:border-gold/50 hover:text-white" @click="creating = !creating">＋ Library</button>
     </section>
-    <form v-if="creating" class="surface mb-6 flex max-w-lg gap-3 rounded-2xl p-4" @submit.prevent="addLibrary"><input v-model="newLibraryName" class="field" placeholder="Library name" autofocus /><button class="btn btn-primary" :disabled="!newLibraryName.trim()">Create</button></form>
+    <form v-if="creating" class="surface mb-6 flex flex-wrap max-w-lg gap-3 rounded-2xl p-4" @submit.prevent="addLibrary"><input aria-label="Library name" v-model="newLibraryName" class="field" placeholder="Library name" autofocus /><button class="btn btn-primary" :disabled="!newLibraryName.trim()">Create</button></form>
     <p v-if="libraryError" class="mb-5 text-sm text-[#efa58b]">{{ libraryError }}</p>
 
-    <section class="mb-8 flex flex-col gap-4 border-y border-white/10 py-5">
-      <div class="flex flex-col gap-3 lg:flex-row">
-        <input v-model="query" class="field lg:max-w-sm" placeholder="Search your library…" />
-        <select :value="mediaFilter" class="field lg:max-w-[180px]" @change="setMedia(($event.target as HTMLSelectElement).value as 'all' | 'NOVEL' | 'MANGA')"><option value="all">All formats</option><option value="NOVEL">Novels</option><option value="MANGA">Manga</option></select>
-        <select v-model="authorFilter" class="field lg:max-w-[220px]"><option value="">All manga authors</option><option v-for="author in mangaAuthors" :key="author" :value="author">{{ author }}</option></select>
-        <select v-model="languageFilter" class="field lg:max-w-[190px]"><option value="">All languages</option><option v-for="language in mangaLanguages" :key="language" :value="language">{{ language }}</option></select>
-        <select v-model="tagFilter" class="field lg:max-w-[220px]"><option value="">All tags</option><option v-for="tag in mangaTags" :key="tag" :value="tag">{{ tag }}</option></select>
-        <button v-if="hasFilters" class="btn btn-quiet whitespace-nowrap" @click="clearFilters">Clear filters</button>
-      </div>
-      <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div class="flex gap-8 text-sm"><div><span class="font-serif text-2xl">{{ response?.total ?? "…" }}</span><span class="ml-2 text-white/40">titles</span></div><div><span class="font-serif text-2xl">{{ totalChapters }}</span><span class="ml-2 text-white/40">indexed</span></div><div><span class="font-serif text-2xl">{{ translatedChapters }}</span><span class="ml-2 text-white/40">translated</span></div></div>
-        <div class="flex items-center gap-2" aria-label="Library view"><button class="rounded-lg px-3 py-2 text-xs" :class="viewMode === 'list' ? 'bg-gold text-ink' : 'bg-white/5 text-white/45'" @click="setView('list')">☷ List</button><button class="rounded-lg px-3 py-2 text-xs" :class="viewMode === 'grid' ? 'bg-gold text-ink' : 'bg-white/5 text-white/45'" @click="setView('grid')">▦ Grid</button></div>
-      </div>
+    <section class="mb-5 space-y-3">
+      <div class="flex gap-2"><input v-model="query" aria-label="Search your library" class="field" placeholder="Search your library…" /><button class="btn btn-quiet" @click="filtersOpen = true">Filters{{ hasFilters ? ' •' : '' }}</button></div>
+      <div class="flex flex-wrap items-center justify-between gap-2"><span class="text-sm text-muted">{{ response?.total ?? '…' }} titles</span><div class="flex gap-2"><button class="btn btn-quiet" :aria-pressed="viewMode === 'list'" @click="setView('list')">List</button><button class="btn btn-quiet" :aria-pressed="viewMode === 'grid'" @click="setView('grid')">Grid</button></div></div>
+      <p class="text-xs text-muted">Adult titles are visible only in their selected library.</p>
     </section>
-
+    <AppDialog v-if="filtersOpen" title="Library filters" @close="filtersOpen = false"><div class="grid gap-4">
+      <label>Format<select aria-label="Format" :value="mediaFilter" class="field mt-2" @change="setMedia(($event.target as HTMLSelectElement).value as any)"><option value="all">All formats</option><option value="NOVEL">Novels</option><option value="MANGA">Manga</option></select></label>
+      <template v-if="mediaFilter !== 'NOVEL'"><label>Author<select aria-label="Author" v-model="authorFilter" class="field mt-2"><option value="">All manga authors</option><option v-for="author in mangaAuthors" :key="author">{{ author }}</option></select></label><label>Language<select aria-label="Language" v-model="languageFilter" class="field mt-2"><option value="">All languages</option><option v-for="language in mangaLanguages" :key="language">{{ language }}</option></select></label><label>Tag<select aria-label="Tag" v-model="tagFilter" class="field mt-2"><option value="">All tags</option><option v-for="tag in mangaTags" :key="tag">{{ tag }}</option></select></label></template>
+      <div class="flex flex-wrap gap-2"><button class="btn btn-quiet" @click="clearFilters">Clear filters</button><button class="btn btn-primary" @click="filtersOpen = false">Show {{ response?.total ?? '' }} titles</button></div>
+    </div></AppDialog>
     <p v-if="fetchError" role="alert" class="mb-4 text-sm text-[#efa58b]">{{ fetchError }} <button class="underline" @click="retry">Retry</button></p>
-    <p v-if="pending && filtered.length" role="status" class="mb-4 text-sm text-white/40">Updating titles…</p>
+    <p v-if="pending && filtered.length" role="status" class="mb-4 text-sm text-muted">Updating titles…</p>
     <div v-if="pending && !filtered.length" aria-label="Opening your library" class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5"><div v-for="n in 10" :key="n" class="aspect-[2/3] animate-pulse rounded-2xl bg-white/5" /></div>
     <section v-else-if="filtered.length" :class="viewMode === 'grid' ? 'grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5' : 'space-y-3'">
       <article v-for="novel in filtered" :key="novel.id" class="surface group relative overflow-hidden rounded-2xl">
       <NuxtLink :to="novel.mediaType === 'MANGA' ? `/manga/${novel.slug}` : `/novels/${novel.slug}`" class="block">
         <template v-if="viewMode === 'grid'">
-          <div class="relative aspect-[2/3] overflow-hidden bg-gradient-to-br from-moss to-ink"><img loading="lazy" decoding="async" v-if="novel.coverUrl" :src="novel.coverUrl" :alt="novel.titleOriginal" class="h-full w-full object-cover transition duration-500 group-hover:scale-[1.035]" @error="($event.target as HTMLImageElement).style.display='none'" /><div class="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/80 to-transparent" /><div class="absolute bottom-3 left-3 flex gap-1"><span class="badge badge-muted">{{ novel.mediaType === 'MANGA' ? 'Manga' : 'Novel' }}</span><span v-if="novel.contentRating === 'ADULT'" class="badge badge-bad">Adult</span></div></div>
-          <div class="p-4"><h2 class="line-clamp-2 font-serif text-lg font-semibold leading-snug">{{ novel.titleTranslated || novel.titleOriginal }}</h2><p class="mt-2 truncate text-xs text-white/45">{{ novel.author || 'Unknown creator' }}</p><p class="mt-3 text-[11px] text-white/35">{{ novel.mediaType === 'MANGA' ? `${novel.downloadedPageCount} downloaded · ${novel.chapterCount} pages` : `${novel.scrapedCount} downloaded · ${novel.chapterCount} chapters` }}</p></div>
+          <div class="relative aspect-[2/3] overflow-hidden bg-gradient-to-br from-moss to-ink"><BookCover :src="novel.coverUrl" :title="novel.titleOriginal" class="h-full w-full object-cover transition duration-500 group-hover:scale-[1.035]" /><div class="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/80 to-transparent" /><div class="absolute bottom-3 left-3 flex gap-1"><span class="badge badge-muted">{{ novel.mediaType === 'MANGA' ? 'Manga' : 'Novel' }}</span><span v-if="novel.contentRating === 'ADULT'" class="badge badge-bad">Adult</span></div></div>
+          <div class="p-4"><h2 class="line-clamp-2 font-serif text-lg font-semibold leading-snug">{{ novel.titleTranslated || novel.titleOriginal }}</h2><p class="mt-2 truncate text-xs text-muted">{{ novel.author || 'Unknown creator' }}</p><p class="mt-3 text-[11px] text-muted">{{ novel.mediaType === 'MANGA' ? `${novel.downloadedPageCount} downloaded · ${novel.chapterCount} pages` : `${novel.scrapedCount} downloaded · ${novel.chapterCount} chapters` }}</p></div>
         </template>
         <template v-else>
-          <div class="grid min-h-[132px] grid-cols-[88px_minmax(0,1fr)] sm:grid-cols-[105px_minmax(0,1fr)]"><div class="overflow-hidden bg-gradient-to-br from-moss to-ink"><img loading="lazy" decoding="async" v-if="novel.coverUrl" :src="novel.coverUrl" :alt="novel.titleOriginal" class="h-full w-full object-cover transition duration-500 group-hover:scale-[1.035]" @error="($event.target as HTMLImageElement).style.display='none'" /></div><div class="flex min-w-0 flex-col p-4 sm:p-5"><div class="flex items-start justify-between gap-3"><div class="flex gap-1"><span class="badge badge-muted">{{ novel.mediaType === 'MANGA' ? 'Manga' : (novel.category || 'Novel') }}</span><span v-if="novel.contentRating === 'ADULT'" class="badge badge-bad">Adult</span></div><span class="shrink-0 text-xs text-white/35">{{ novel.sourceStatus }}</span></div><h2 class="mt-2 truncate font-serif text-xl font-semibold">{{ novel.titleTranslated || novel.titleOriginal }}</h2><p class="mt-1 truncate text-sm text-white/45">{{ novel.author || 'Unknown creator' }}</p><div class="mt-auto flex flex-wrap items-center gap-2 pt-3 text-xs text-white/35"><span>{{ novel.mediaType === 'MANGA' ? `${novel.downloadedPageCount}/${novel.chapterCount} pages downloaded` : `${novel.scrapedCount}/${novel.chapterCount} chapters downloaded` }}</span><span v-for="library in novel.libraries" :key="library.id" class="rounded-full bg-white/5 px-2 py-1 text-[10px]">{{ library.name }}</span></div></div></div>
+          <div class="grid min-h-[132px] grid-cols-[88px_minmax(0,1fr)] sm:grid-cols-[105px_minmax(0,1fr)]"><div class="overflow-hidden bg-gradient-to-br from-moss to-ink"><BookCover :src="novel.coverUrl" :title="novel.titleOriginal" class="h-full w-full object-cover transition duration-500 group-hover:scale-[1.035]" /></div><div class="flex min-w-0 flex-col p-4 sm:p-5"><div class="flex items-start justify-between gap-3"><div class="flex gap-1"><span class="badge badge-muted">{{ novel.mediaType === 'MANGA' ? 'Manga' : (novel.category || 'Novel') }}</span><span v-if="novel.contentRating === 'ADULT'" class="badge badge-bad">Adult</span></div><span class="shrink-0 text-xs text-muted">{{ novel.sourceStatus }}</span></div><h2 class="mt-2 line-clamp-2 font-serif text-xl font-semibold">{{ novel.titleTranslated || novel.titleOriginal }}</h2><p class="mt-1 truncate text-sm text-muted">{{ novel.author || 'Unknown creator' }}</p><div class="mt-auto flex flex-wrap items-center gap-2 pt-3 text-xs text-muted"><span>{{ novel.mediaType === 'MANGA' ? `${novel.downloadedPageCount}/${novel.chapterCount} pages downloaded` : `${novel.scrapedCount}/${novel.chapterCount} chapters downloaded` }}</span><span v-for="library in novel.libraries" :key="library.id" class="rounded-full bg-white/5 px-2 py-1 text-[10px]">{{ library.name }}</span></div></div></div>
         </template>
       </NuxtLink>
-      <div class="absolute bottom-3 right-3 z-10 flex gap-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100"><button class="rounded-lg border border-white/10 bg-black/75 px-2.5 py-1.5 text-[11px] text-white/60 backdrop-blur hover:border-gold/50 hover:text-gold" @click="openMove(novel)">Move</button><button class="rounded-lg border border-white/10 bg-black/75 px-2.5 py-1.5 text-[11px] text-white/55 backdrop-blur hover:border-[#efa58b]/50 hover:text-[#efa58b]" :disabled="removingId === novel.id" @click="removeFromLibrary(novel)">{{ removingId === novel.id ? 'Removing…' : 'Remove' }}</button></div>
+      <div class="relative flex justify-end gap-2 px-3 pb-3 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"><button class="rounded-lg border border-white/10 bg-black/75 px-2.5 py-1.5 text-[11px] text-white/60 backdrop-blur hover:border-gold/50 hover:text-gold" @click="openMove(novel)">Move</button><button class="rounded-lg border border-white/10 bg-black/75 px-2.5 py-1.5 text-[11px] text-muted backdrop-blur hover:border-[#efa58b]/50 hover:text-[#efa58b]" :disabled="removingId === novel.id" @click="removeFromLibrary(novel)">{{ removingId === novel.id ? 'Removing…' : 'Remove' }}</button></div>
       </article>
     </section>
-    <section v-else-if="!fetchError" class="surface rounded-3xl px-6 py-20 text-center"><div class="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-white/5 font-serif text-2xl text-gold">文</div><h2 class="font-serif text-2xl font-semibold">{{ hasFilters ? 'No matching titles' : 'Nothing on this shelf yet' }}</h2><p class="mx-auto mt-3 max-w-md text-sm leading-6 text-white/45">{{ hasFilters ? 'Try another search or clear your filters.' : 'Browse an installed source and bookmark a title. Content is downloaded only when you ask.' }}</p><NuxtLink to="/sources" class="btn btn-primary mt-7">Browse sources</NuxtLink></section>
+    <section v-else-if="!fetchError" class="surface rounded-3xl px-6 py-20 text-center"><div class="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-white/5 font-serif text-2xl text-gold">文</div><h2 class="font-serif text-2xl font-semibold">{{ hasFilters ? 'No matching titles' : 'Nothing on this shelf yet' }}</h2><p class="mx-auto mt-3 max-w-md text-sm leading-6 text-muted">{{ hasFilters ? 'Try another search or clear your filters.' : 'Browse an installed source and bookmark a title. Content is downloaded only when you ask.' }}</p><NuxtLink to="/sources" class="btn btn-primary mt-7">Browse sources</NuxtLink></section>
 
-    <div ref="sentinel" class="py-8 text-center text-sm text-white/40">
+    <div ref="sentinel" class="py-8 text-center text-sm text-muted">
       <button v-if="response?.hasMore" class="btn btn-quiet" :disabled="pending || loadingMore" @click="loadMore">{{ loadingMore ? 'Loading more…' : 'Load more' }}</button>
       <span v-else-if="filtered.length && !pending">All {{ response?.total }} titles loaded</span>
     </div>
-    <div v-if="moveNovel" class="fixed inset-0 z-[80] grid place-items-center bg-black/70 px-5 backdrop-blur-sm" @click.self="moveNovel = null">
-      <section class="surface w-full max-w-md rounded-3xl p-6 shadow-2xl"><p class="text-xs font-semibold uppercase tracking-[.2em] text-gold/75">Move bookmark</p><h2 class="mt-3 line-clamp-2 font-serif text-2xl font-semibold">{{ moveNovel.titleTranslated || moveNovel.titleOriginal }}</h2><label class="mt-6 block text-xs text-white/45">Destination library</label><select v-model="moveLibraryId" class="field mt-2"><option v-for="library in libraries" :key="library.id" :value="library.id">{{ library.name }}</option></select><div class="mt-6 flex justify-end gap-2"><button class="btn btn-quiet" :disabled="moving" @click="moveNovel = null">Cancel</button><button class="btn btn-primary" :disabled="moving || !moveLibraryId" @click="moveBookmark">{{ moving ? 'Moving…' : 'Move bookmark' }}</button></div></section>
-    </div>
+    <AppDialog v-if="moveNovel" title="Move bookmark" @close="moveNovel = null">
+      <section class="surface w-full max-w-md rounded-3xl p-6 shadow-2xl"><p class="text-xs font-semibold uppercase tracking-[.2em] text-gold">Move bookmark</p><h2 class="mt-3 line-clamp-2 font-serif text-2xl font-semibold">{{ moveNovel.titleTranslated || moveNovel.titleOriginal }}</h2><label for="move-library" class="mt-6 block text-xs text-muted">Destination library</label><select id="move-library" v-model="moveLibraryId" class="field mt-2"><option v-for="library in libraries" :key="library.id" :value="library.id">{{ library.name }}</option></select><div class="mt-6 flex justify-end gap-2"><button class="btn btn-quiet" :disabled="moving" @click="moveNovel = null">Cancel</button><button class="btn btn-primary" :disabled="moving || !moveLibraryId" @click="moveBookmark">{{ moving ? 'Moving…' : 'Move bookmark' }}</button></div></section>
+    </AppDialog>
+    <AppDialog v-if="removeTarget" title="Remove bookmark?" @close="removeTarget = null"><p class="mb-5">Remove {{ removeTarget.titleTranslated || removeTarget.titleOriginal }} from {{ activeLibraryId === 'all' ? 'your libraries' : 'this library' }}? Downloaded files and reading progress stay on this computer.</p><button class="btn btn-danger" :disabled="Boolean(removingId)" @click="removeFromLibrary(removeTarget)">Remove bookmark</button></AppDialog>
   </div>
 </template>

@@ -10,7 +10,7 @@ const keys = generateKeyPairSync('ed25519')
 const publicKey = keys.publicKey.export({ type: 'spki', format: 'pem' }).toString()
 const key = fingerprint(publicKey)
 function signed(value) { const payload = Buffer.from(JSON.stringify(value)); return { publicKey, payload: payload.toString('base64'), signature: sign(null, payload, keys.privateKey).toString('base64') } }
-const manifest = version => manifestSchema.parse({ id: 'example', name: 'Example', version, protocol: 1, entry: 'index.mjs', mediaType: 'NOVEL', contentRating: 'SAFE', language: 'en', baseUrl: 'https://example.invalid', capabilities: ['search'], settings: [{ key: 'token', label: 'Token', type: 'secret' }] })
+const manifest = version => manifestSchema.parse({ id: 'example', name: 'Example', version, protocol: 1, entry: 'index.mjs', mediaType: 'NOVEL', contentRating: 'SAFE', language: 'en', baseUrl: 'https://example.invalid', capabilities: ['search'], settings: [{ key: 'token', label: 'Token', type: 'secret' }, { key: 'quality', label: 'Quality', type: 'select', options: ['original', 'small'], default: 'original' }] })
 const code = version => `export default { metadata: async ({id}) => ({sourceNovelId:id,titleOriginal:'Example'}), search: async (p,ctx) => { if(p.crash) process.exit(2); if(p.slow) await new Promise(r=>setTimeout(r,100)); return {version:'${version}',pid:process.pid, configured: !!ctx.config.token, hasOwnerSecret: !!process.env.OWNER_SESSION_SECRET} } }`
 
 test('rejects tampered indexes, incompatible manifests, and unsafe package paths', () => {
@@ -42,6 +42,8 @@ test('install, runtime update, rollback, crash recovery, publisher pinning and r
   await manager.action('example', 'rollback'); assert.equal((await manager.invoke('example', 'search')).version, '1.0.0')
   publish('1.2.0', 'throw new Error("broken update")'); await manager.refreshRepository(key); await assert.rejects(manager.install(key, 'example')); assert.equal((await manager.invoke('example', 'search')).version, '1.0.0')
   publish('1.3.0', code('bad'), '0'.repeat(64)); await manager.refreshRepository(key); await assert.rejects(manager.install(key, 'example'), /checksum/)
+  assert.deepEqual((await manager.list()).installed[0].settings, { quality: 'original' })
+  await manager.action('example', 'configure', { quality: 'small' }); assert.equal((await manager.list()).installed[0].settings.quality, 'small')
   await manager.action('example', 'configure', { token: 'test-secret' }); assert.equal((await manager.invoke('example', 'search')).configured, true); assert.equal(JSON.stringify(await manager.list()).includes('test-secret'), false)
   await assert.rejects(manager.invoke('example', 'search', { crash: true })); assert.equal((await manager.invoke('example', 'search')).version, '1.0.0')
   await manager.action('example', 'disable'); await assert.rejects(manager.invoke('example', 'search'), { code: 'SOURCE_UNAVAILABLE' })
@@ -50,6 +52,8 @@ test('install, runtime update, rollback, crash recovery, publisher pinning and r
   await assert.rejects(manager.invoke('example', 'search'), { code: 'SOURCE_UNAVAILABLE' })
   await manager.action('example', 'enable'); manager.close(); manager = new ExtensionManager(root)
   assert.equal((await manager.invoke('example', 'search')).configured, true)
+  assert.equal((await manager.list()).installed[0].settings.quality, 'small')
+  assert.equal((await manager.list()).installed[0].settings.token, undefined)
   await manager.action('example', 'uninstall'); await assert.rejects(manager.invoke('example', 'search')); assert.equal((await manager.load()).owners.example, key)
  } finally { manager.close(); await new Promise(r => server.close(r)); await new Promise(r => setTimeout(r, 300)); await rm(root, { recursive: true, force: true }) }
 })

@@ -3,7 +3,7 @@ defineProps<{ title: string, library?: { id: string, name: string }, media: 'NOV
 </script>
 
 <template>
-  <nav aria-label="Breadcrumb" class="mb-6 text-xs text-white/40">
+  <nav aria-label="Breadcrumb" class="mb-6 text-xs text-muted">
     <ol class="flex min-w-0 flex-wrap items-center gap-2">
       <li><NuxtLink to="/library" class="hover:text-gold">Library</NuxtLink></li>
       <template v-if="library">

@@ -6,6 +6,6 @@ const { data: stream, error, refresh } = await useFetch<any>('/api/manga/stream'
 </script>
 
 <template>
-  <div v-if="error" role="alert" class="grid min-h-screen place-content-center gap-4 text-center"><p>Could not open this manga.</p><button class="btn btn-primary" @click="refresh()">Retry</button></div>
+  <PageError v-if="error" :error="error" @retry="refresh()" />
   <MangaReader v-else :title="stream?.titleOriginal || 'Streaming manga…'" :pages="stream?.pages || []" :back-to="`/sources/${sourceSite}/books/${sourceNovelId}`" :default-mode="stream?.defaultReaderMode || 'manga'" :source-site="sourceSite" />
 </template>

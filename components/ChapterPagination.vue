@@ -9,7 +9,7 @@ const pages = computed(() => {
 
 <template>
   <nav :aria-label="`Chapter pagination ${placement}`" class="my-5 flex flex-col items-center gap-3 text-sm">
-    <p class="text-xs text-white/45" aria-live="polite">Page {{ page }} of {{ pageCount }} · {{ total }} chapters</p>
+    <p class="text-xs text-muted" aria-live="polite">Page {{ page }} of {{ pageCount }} · {{ total }} chapters</p>
     <div class="flex max-w-full flex-wrap items-center justify-center gap-1.5">
       <button class="pagination-button" :disabled="pending || page <= 1" @click="emit('change', 1)">First</button>
       <button class="pagination-button" :disabled="pending || page <= 1" @click="emit('change', page - 1)">Prev</button>
@@ -22,6 +22,6 @@ const pages = computed(() => {
 
 <style scoped>
 .pagination-button { @apply min-h-11 min-w-9 rounded-lg border border-white/10 px-2 text-xs font-semibold text-white/70 transition hover:bg-white/10 disabled:cursor-default; }
-.pagination-button:disabled:not([aria-current="page"]) { @apply opacity-30; }
+.pagination-button:disabled:not([aria-current="page"]) { @apply opacity-75; }
 .pagination-button[aria-current="page"] { @apply border-gold/60 bg-gold/15 text-gold; }
 </style>

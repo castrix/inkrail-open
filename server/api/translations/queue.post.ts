@@ -1,7 +1,9 @@
+import { requireTranslationEnabled } from '~/server/utils/translation-enabled'
 import { z } from 'zod'
 import { queueNovelTranslations } from '~/server/services/translation'
 
 export default defineEventHandler(async (event) => {
+  requireTranslationEnabled()
   const body = z.object({
     novelId: z.string(),
     chapterIds: z.array(z.string()).optional(),
