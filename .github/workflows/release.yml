@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  windows-release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Build Windows launcher
+        shell: powershell
+        run: ./scripts/launcher/build.ps1
+      - name: Package release
+        shell: powershell
+        run: |
+          $version = $env:GITHUB_REF_NAME
+          $folderName = "InkrailOpen-$version-windows-x64"
+          $releaseRoot = Join-Path $PWD 'work/release'
+          $packageRoot = Join-Path $releaseRoot $folderName
+          New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
+          git archive --format=zip --output="$releaseRoot/source.zip" HEAD
+          Expand-Archive -LiteralPath "$releaseRoot/source.zip" -DestinationPath $packageRoot
+          Copy-Item -LiteralPath '.output' -Destination (Join-Path $packageRoot '.output') -Recurse
+          Copy-Item -LiteralPath 'InkrailOpen.exe' -Destination $packageRoot
+          $archive = Join-Path $releaseRoot "$folderName.zip"
+          Compress-Archive -Path $packageRoot -DestinationPath $archive -CompressionLevel Optimal
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant()
+          "$hash  $folderName.zip" | Set-Content -Encoding ascii "$archive.sha256"
+      - name: Publish GitHub release
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = $env:GITHUB_REF_NAME
+          $archive = "work/release/InkrailOpen-$version-windows-x64.zip"
+          gh release create $version $archive "$archive.sha256" --verify-tag --title "Inkrail Open $version" --generate-notes
