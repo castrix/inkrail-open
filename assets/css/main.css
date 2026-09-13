@@ -78,7 +78,16 @@ select.field option { background: #20241f; color: #f4efe3; }
 .reader-surface header { padding-top: max(.5rem, env(safe-area-inset-top)); }
 .reader-surface footer { padding-bottom: max(.5rem, env(safe-area-inset-bottom)); }
 .reader-settings { bottom: max(1rem, env(safe-area-inset-bottom)); }
-.reader-image { max-height: calc(100dvh - 12rem); }
+.reader-surface { -webkit-tap-highlight-color: transparent; }
+.reader-surface :focus:not(:focus-visible) { outline: none; box-shadow: none; }
+.reader-image {
+  width: auto;
+  height: 100vh;
+  height: 100dvh;
+  max-width: 100%;
+  max-height: 100vh;
+  max-height: 100dvh;
+}
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
 
 @media (max-width: 639px) {

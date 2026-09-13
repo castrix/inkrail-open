@@ -53,7 +53,15 @@ export interface MangaPageReference {
   position: number
 }
 
+export interface MangaChapterReference {
+  sourceChapterId: string
+  titleOriginal: string
+  position: number
+  sourcePageIds: string[]
+}
+
 export interface MangaMetadata extends NovelMetadata {
+  mangaChapters?: MangaChapterReference[]
   sourceSite: string
   publisher: string | null
   pages: MangaPageReference[]

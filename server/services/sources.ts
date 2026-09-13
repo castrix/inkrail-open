@@ -1,3 +1,4 @@
+import { parseMangaChapters } from '~/shared/utils/manga-chapters'
 import prisma from '~/server/lib/prisma'
 import { z } from 'zod'
 import { invokeSource, sourceManifest } from './extensions'
@@ -14,7 +15,7 @@ export async function fetchSourceMetadata(source: string, id: string, options = 
   if (metadata.sourceNovelId !== id) throw new Error('Source returned a different item ID')
   const pages = manifest.mediaType === 'MANGA' ? z.array(pageSchema).parse(raw.pages || await invokeSource(source, 'pages', { id })) : []
   if (new Set(pages.map(p => p.sourcePageId)).size !== pages.length || new Set(pages.map(p => p.position)).size !== pages.length) throw new Error('Duplicate manga pages')
-  return { ...metadata, sourceSite: source, pages, tags: z.array(z.string()).parse(raw.tags || []), language: raw.language || manifest.sourceLanguage, publisher: raw.publisher || null, favoriteCount: raw.favoriteCount || null }
+  return { ...metadata, sourceSite: source, pages, mangaChapters: manifest.mediaType === 'MANGA' ? parseMangaChapters(raw.mangaChapters, pages) : undefined, tags: z.array(z.string()).parse(raw.tags || []), language: raw.language || manifest.sourceLanguage, publisher: raw.publisher || null, favoriteCount: raw.favoriteCount || null }
 }
 export async function fetchSourceDirectory(source: string, id: string): Promise<{ parsed: ParsedIndex, transport: string }> {
   const parsed = z.object({ chapters: z.array(z.object({ sourceChapterId: ref, sourceUrl: url, position: z.number().int().positive(), titleOriginal: z.string(), kind: z.enum(['MAIN','EXTRA','ANNOUNCEMENT','UNKNOWN']) })), complete: z.boolean(), expectedCount: z.number().nullable() }).parse(await invokeSource(source, 'chapters', { id }))

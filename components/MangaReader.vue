@@ -20,6 +20,13 @@ let observer: IntersectionObserver | undefined, positionObserver: IntersectionOb
 let chromeTimer: ReturnType<typeof setTimeout> | undefined, preloadTimer: ReturnType<typeof setTimeout> | undefined
 let queue: ImageQueue<HTMLImageElement> | undefined, touchStartX = 0, touchStartY = 0, ignoreClickUntil = 0, mounted = false
 
+function sourcePreloadDelay() {
+  if (props.sourceSite === 'mangadex') return 0
+  if (props.sourceSite === 'hitomi') return 900
+  if (props.sourceSite === 'nhentai') return 850
+  return 350
+}
+
 function saveSettings() {
   try { localStorage.setItem('inkrail-manga-reader', JSON.stringify({ mode: mode.value, direction: direction.value, directionVersion: 2, fit: fit.value })) } catch { /* Storage may be disabled. */ }
 }
@@ -37,7 +44,7 @@ function scheduleChromeHide() {
 async function loadImage(url: string, signal: AbortSignal): Promise<HTMLImageElement> {
   if (url !== currentPage.value?.imageUrl && !url.startsWith('/api/manga/pages/')) {
     await new Promise<void>((resolve, reject) => {
-      const delay = props.sourceSite === 'hitomi' ? 900 : props.sourceSite === 'nhentai' ? 850 : 350
+      const delay = sourcePreloadDelay()
       const timer = setTimeout(() => { signal.removeEventListener('abort', abort); resolve() }, delay)
       const abort = () => { clearTimeout(timer); signal.removeEventListener('abort', abort); reject(new Error('Cancelled')) }
       signal.addEventListener('abort', abort, { once: true })
@@ -70,7 +77,7 @@ function schedulePreload() {
   imageError.value = ''
   const current = currentPage.value.imageUrl
   queue?.setWindow([current])
-  const delay = currentPage.value.archived ? 0 : props.sourceSite === 'hitomi' ? 900 : props.sourceSite === 'nhentai' ? 850 : 350
+  const delay = currentPage.value.archived ? 0 : sourcePreloadDelay()
   preloadTimer = setTimeout(() => {
     const indices = [currentIndex.value, currentIndex.value + 1, currentIndex.value - 1, currentIndex.value + 2]
     queue?.setWindow(indices.map(index => props.pages[index]?.imageUrl).filter((url): url is string => Boolean(url)))
@@ -121,9 +128,17 @@ function setupWebtoon() {
 }
 function onKey(event: KeyboardEvent) {
   if (event.key === 'Tab' || event.key === 'Escape') { keepChromeOpen(); return }
-  if ((event.target as HTMLElement)?.matches('input,select,textarea,button') || mode.value !== 'manga') return
-  if (['ArrowLeft','ArrowRight',' ','Enter'].includes(event.key)) event.preventDefault()
-  if (event.key === 'ArrowLeft') leftZone(); else if (event.key === 'ArrowRight') rightZone(); else if (event.key === ' ' || event.key === 'Enter') toggleChrome()
+  if (mode.value !== 'manga' || event.altKey || event.ctrlKey || event.metaKey) return
+  const target = event.target as HTMLElement | null
+  const editing = target?.matches('input,select,textarea') || target?.isContentEditable
+  if (!editing && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+    event.preventDefault()
+    event.key === 'ArrowLeft' ? leftZone() : rightZone()
+    return
+  }
+  if (!target?.closest('input,select,textarea,button,a') && (event.key === ' ' || event.key === 'Enter')) {
+    event.preventDefault(); toggleChrome()
+  }
 }
 function finishSwipe(event: TouchEvent) {
   if (mode.value !== 'manga' || (event.target as HTMLElement)?.closest('header,footer')) return
@@ -141,7 +156,7 @@ onMounted(() => {
     imageLoading.value = false
     if (error) imageError.value = 'Could not load this page.'
     else if (image) { displayedPage.value = currentPage.value; imageRevision.value++; imageLoading.value = true }
-  }, 1, 6)
+  }, props.sourceSite === 'mangadex' ? 2 : 1, 6)
   try {
     const saved = JSON.parse(localStorage.getItem('inkrail-manga-reader') || '{}')
     if (['manga','webtoon'].includes(saved.mode)) mode.value = saved.mode
@@ -172,14 +187,14 @@ onBeforeUnmount(() => { mounted = false; queue?.dispose(); observer?.disconnect(
       <button class="grid h-9 w-9 place-items-center rounded-lg border border-white/10 text-sm" aria-label="Toggle fullscreen" @click="toggleFullscreen">⛶</button>
     </header>
 
-    <main v-if="pages.length && mode === 'webtoon'" class="mx-auto max-w-5xl" @click="toggleChrome">
+    <main v-if="pages.length && mode === 'webtoon'" class="mx-auto max-w-5xl" :class="$slots.chapters ? 'pb-64' : ''" @click="toggleChrome">
       <div v-for="(page, index) in pages" :key="page.sourcePageId" :ref="element => registerPage(index, element)" :data-index="index" class="relative w-full bg-black" :style="{ aspectRatio: String(ratios[page.sourcePageId] || 2 / 3) }">
         <img v-if="nearby.has(index) && !webtoonErrors.has(page.sourcePageId)" :src="page.imageUrl" :alt="`Page ${page.position}`" decoding="async" referrerpolicy="no-referrer" class="block h-auto w-full" @load="measured(page, $event)" @error="webtoonErrors.add(page.sourcePageId)" />
         <button v-if="nearby.has(index) && webtoonErrors.has(page.sourcePageId)" class="absolute inset-0 grid place-content-center text-sm text-gold" @click.stop="webtoonErrors.delete(page.sourcePageId)">Could not load page {{ page.position }}. Tap to retry.</button>
       </div>
     </main>
 
-    <main v-else-if="pages.length" class="relative grid min-h-screen place-items-center overflow-hidden px-1 pb-48 pt-20 sm:px-6">
+    <main v-else-if="pages.length" class="relative grid place-items-center overflow-hidden" :class="fit === 'height' ? 'h-dvh min-h-dvh p-0' : ($slots.chapters ? 'min-h-screen px-1 pb-64 pt-20 sm:px-6' : 'min-h-screen px-1 pb-48 pt-20 sm:px-6')">
       <img v-if="displayedPage" :key="`${displayedPage.sourcePageId}-${imageRevision}`" @load="imageLoading = false; imageError = ''" @error="imageLoading = false; imageError = 'Could not load this page.'" :src="displayedPage.imageUrl" :alt="`Page ${displayedPage.position}`" decoding="async" fetchpriority="high" referrerpolicy="no-referrer" class="block object-contain" :class="fit === 'height' ? 'reader-image max-w-full' : 'h-auto w-full max-w-5xl'" />
       <div v-if="imageLoading || imageError" role="status" class="absolute left-1/2 top-16 z-20 -translate-x-1/2 rounded-xl bg-black/80 px-4 py-3 text-sm">{{ imageError || `Loading page ${pageNumber}…` }} <button v-if="imageError" class="ml-2 text-gold underline" @click="retryImage">Retry</button></div>
       <button class="absolute inset-y-14 left-0 w-[34%] cursor-w-resize bg-transparent" :aria-label="direction === 'rtl' ? 'Next page' : 'Previous page'" @click="leftZone"><span class="sr-only">{{ direction === 'rtl' ? 'Next page' : 'Previous page' }}</span></button>
@@ -190,11 +205,12 @@ onBeforeUnmount(() => { mounted = false; queue?.dispose(); observer?.disconnect(
     <main v-else class="grid min-h-screen place-items-center px-5 text-center text-sm text-muted">Opening manga…</main>
 
     <footer @focusin="keepChromeOpen" @focusout="scheduleChromeHide" class="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-black/80 px-3 py-2 backdrop-blur-xl transition duration-200" :class="chromeVisible ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-full opacity-0'">
+      <slot name="chapters" />
       <div class="mx-auto flex max-w-5xl flex-wrap items-center gap-2">
         <div class="flex rounded-lg border border-white/10 p-0.5 text-[10px]"><button class="rounded-md px-2 py-1.5" :class="mode === 'manga' ? 'bg-white/15' : 'text-muted'" @click="mode = 'manga'">Manga</button><button class="rounded-md px-2 py-1.5" :class="mode === 'webtoon' ? 'bg-white/15' : 'text-muted'" @click="mode = 'webtoon'">Webtoon</button></div>
         <template v-if="mode === 'manga'">
           <label class="sr-only" for="manga-reading-direction">Reading direction</label>
-          <select id="manga-reading-direction" v-model="direction" class="rounded-lg border border-white/10 bg-black px-2 py-2 text-xs" @focus="keepChromeOpen" @blur="scheduleChromeHide">
+          <select id="manga-reading-direction" v-model="direction" class="rounded-lg border border-white/10 bg-black px-2 py-2 text-xs" @change="($event.target as HTMLSelectElement).blur()" @focus="keepChromeOpen" @blur="scheduleChromeHide">
             <option value="ltr">Left → right</option><option value="rtl">Right → left</option>
           </select>
           <button class="rounded-lg border border-white/10 px-2 py-2 text-xs" @click="fit = fit === 'height' ? 'width' : 'height'">Fit {{ fit === 'height' ? 'height' : 'width' }}</button>
@@ -204,7 +220,7 @@ onBeforeUnmount(() => { mounted = false; queue?.dispose(); observer?.disconnect(
         <label class="flex items-center gap-2 text-xs"><span class="sr-only">Go to page</span><input :value="pageNumber" type="number" min="1" :max="pages.length" class="w-16 rounded-lg border border-white/20 bg-black px-2" @change="setPage(Number(($event.target as HTMLInputElement).value) - 1)" /> / {{ pages.length }}</label>
         </div>
       </div>
-      <p v-if="mode === 'manga'" class="mx-auto mt-1 max-w-5xl text-[10px] text-muted">{{ direction === 'ltr' ? 'Next page: tap right or swipe left' : 'Next page: tap left or swipe right' }}</p>
+      <p v-if="mode === 'manga'" class="mx-auto mt-1 max-w-5xl text-[10px] text-muted">{{ direction === 'ltr' ? 'Next page: tap right, swipe left, or press →' : 'Next page: tap left, swipe right, or press ←' }} · Arrow keys navigate pages</p>
     </footer>
   </div>
 </template>

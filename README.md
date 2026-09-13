@@ -72,3 +72,7 @@ See [extension authoring](docs/extensions.md), [architecture](docs/architecture.
 Cloudflare DNS-over-HTTPS is enabled by default for source requests. Set `SCRAPER_DNS_ENABLED=false` to use system DNS, or set `SCRAPER_DNS_SERVERS=1.1.1.1,1.0.0.1` to choose comma-separated resolver IPs. Custom resolvers must support HTTPS `/dns-query` with the Cloudflare-compatible JSON API and a valid certificate for their IP address. Ordinary UDP DNS servers are not supported by this setting.
 
 Inkrail Open exposes these options under **Advanced settings** in first-run setup and the tray **Settings** window. Save and restart to apply changes; source extensions inherit these settings. Core repository downloads also use the override. No Windows or router DNS settings are changed. HTTPS remains encrypted end to end; resolver failures are reported without silently falling back to system DNS. The resolver currently requires IPv4 answers (A records).
+
+### Optional manga chapters
+
+Source metadata may include `mangaChapters`: an ordered array of `{ sourceChapterId, titleOriginal, position, sourcePageIds }`. Chapter page IDs reference the existing `pages` list, with no duplicates or missing pages. Sources without this field keep the page-based reader. MangaDex 1.1.0 exposes this directory on its source book page for chapter reading, previous/next navigation, and individual chapter downloads. Existing library readers and saved page IDs remain supported without a database migration.
