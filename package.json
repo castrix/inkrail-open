@@ -12,7 +12,7 @@
     "db:push": "prisma db push",
     "db:studio": "prisma studio",
     "worker": "node --env-file=.env --import tsx workers/worker.ts",
-    "test": "vitest run && node --test tests/extensions.test.mjs scripts/launcher/config.test.mjs scripts/launcher/configure.test.mjs scripts/launcher/prepare.test.mjs scripts/launcher/status-summary.test.mjs",
+    "test": "vitest run && node --test tests/extensions.test.mjs tests/dns.test.mjs scripts/launcher/config.test.mjs scripts/launcher/configure.test.mjs scripts/launcher/prepare.test.mjs scripts/launcher/status-summary.test.mjs",
     "test:watch": "vitest",
     "import:tachimanga": "node --env-file=.env --import tsx scripts/import-tachimanga.ts",
     "tailscale:serve": "node scripts/tailscale.mjs serve",

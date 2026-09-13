@@ -1,10 +1,11 @@
 import { readFile, writeFile, rename, mkdir } from 'node:fs/promises'
+import { isIP } from 'node:net'
 import { parseEnv } from 'node:util'
 import { randomBytes } from 'node:crypto'
 const existing = await readFile('.env', 'utf8').catch(e => { if (e.code === 'ENOENT') return null; throw e })
 const env = parseEnv(existing ?? await readFile('.env.example', 'utf8'))
 if (process.argv[2] === 'read') {
-  console.log(JSON.stringify({ port: env.PORT || '4000', host: env.HOST || '127.0.0.1', password: env.OWNER_PASSWORD || '' }))
+  console.log(JSON.stringify({ port: env.PORT || '4000', host: env.HOST || '127.0.0.1', password: env.OWNER_PASSWORD || '', dnsEnabled: env.SCRAPER_DNS_ENABLED || 'true', dnsServers: env.SCRAPER_DNS_SERVERS || '1.1.1.1,1.0.0.1' }))
 } else if (process.argv[2] === 'save') {
   let input = ''
   for await (const chunk of process.stdin) input += chunk
@@ -13,7 +14,11 @@ if (process.argv[2] === 'read') {
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Choose a port between 1 and 65535.')
   if (!['127.0.0.1', '0.0.0.0', 'localhost', '::', '::1'].includes(settings.host)) throw new Error('Unsupported host.')
   if (typeof settings.password !== 'string' || settings.password.length < 8 || /[\r\n"'`\x00]/.test(settings.password)) throw new Error('Use at least 8 password characters, without quotes, backticks or line breaks.')
-  const updates = { PORT: String(port), HOST: settings.host, OWNER_PASSWORD: settings.password }
+  const dnsEnabled = settings.dnsEnabled ?? env.SCRAPER_DNS_ENABLED ?? 'true'
+  const dnsServers = (settings.dnsServers ?? env.SCRAPER_DNS_SERVERS ?? '1.1.1.1,1.0.0.1').split(',').map(value => value.trim())
+  if (!['true', 'false'].includes(dnsEnabled)) throw new Error('DNS override must be true or false.')
+  if (dnsServers.some(value => !isIP(value))) throw new Error('Enter comma-separated IP addresses of JSON DNS-over-HTTPS resolvers.')
+  const updates = { PORT: String(port), HOST: settings.host, OWNER_PASSWORD: settings.password, SCRAPER_DNS_ENABLED: dnsEnabled, SCRAPER_DNS_SERVERS: dnsServers.join(',') }
   if (!env.OWNER_SESSION_SECRET) updates.OWNER_SESSION_SECRET = randomBytes(32).toString('hex')
   let text = existing ?? await readFile('.env.example', 'utf8')
   for (const [key, value] of Object.entries(updates)) {

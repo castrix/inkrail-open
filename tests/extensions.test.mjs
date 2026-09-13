@@ -11,7 +11,7 @@ const publicKey = keys.publicKey.export({ type: 'spki', format: 'pem' }).toStrin
 const key = fingerprint(publicKey)
 function signed(value) { const payload = Buffer.from(JSON.stringify(value)); return { publicKey, payload: payload.toString('base64'), signature: sign(null, payload, keys.privateKey).toString('base64') } }
 const manifest = version => manifestSchema.parse({ id: 'example', name: 'Example', version, protocol: 1, entry: 'index.mjs', mediaType: 'NOVEL', contentRating: 'SAFE', language: 'en', baseUrl: 'https://example.invalid', capabilities: ['search'], settings: [{ key: 'token', label: 'Token', type: 'secret' }, { key: 'quality', label: 'Quality', type: 'select', options: ['original', 'small'], default: 'original' }] })
-const code = version => `export default { metadata: async ({id}) => ({sourceNovelId:id,titleOriginal:'Example'}), search: async (p,ctx) => { if(p.crash) process.exit(2); if(p.slow) await new Promise(r=>setTimeout(r,100)); return {version:'${version}',pid:process.pid, configured: !!ctx.config.token, hasOwnerSecret: !!process.env.OWNER_SESSION_SECRET} } }`
+const code = version => `export default { metadata: async ({id}) => ({sourceNovelId:id,titleOriginal:'Example'}), search: async (p,ctx) => { if(p.crash) process.exit(2); if(p.slow) await new Promise(r=>setTimeout(r,100)); return {version:'${version}',pid:process.pid, configured: !!ctx.config.token, hasOwnerSecret: !!process.env.OWNER_SESSION_SECRET, dnsServers: process.env.SCRAPER_DNS_SERVERS} } }`
 
 test('rejects tampered indexes, incompatible manifests, and unsafe package paths', () => {
  const index = signed({ name: 'Test', packages: [] })
@@ -34,8 +34,9 @@ test('install, runtime update, rollback, crash recovery, publisher pinning and r
  const publish = (version, entry = code(version), hash) => { const m = manifest(version); const bytes = Buffer.from(JSON.stringify({ manifest: m, files: { 'index.mjs': entry } })); assets.set(`/${version}.json`, bytes); index = signed({ name: 'Test', packages: [{ manifest: m, url: `${base}/${version}.json`, sha256: hash || createHash('sha256').update(bytes).digest('hex') }] }) }
  let manager = new ExtensionManager(root)
  try {
+  process.env.SCRAPER_DNS_SERVERS = '1.1.1.1,1.0.0.1'
   publish('1.0.0'); await manager.addRepository(`${base}/index.json`, key); await manager.install(key, 'example')
-  const first = await manager.invoke('example', 'search'); assert.equal(first.version, '1.0.0'); assert.equal(first.hasOwnerSecret, false)
+  const first = await manager.invoke('example', 'search'); assert.equal(first.version, '1.0.0'); assert.equal(first.hasOwnerSecret, false); assert.equal(first.dnsServers, '1.1.1.1,1.0.0.1')
   assert.equal((await manager.invoke('example', 'search')).pid, first.pid)
   const pending = manager.invoke('example', 'search', { slow: true }); publish('1.1.0'); await manager.refreshRepository(key); await manager.install(key, 'example'); assert.equal((await pending).version, '1.0.0')
   assert.equal((await manager.invoke('example', 'search')).version, '1.1.0')

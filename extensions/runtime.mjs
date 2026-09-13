@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url'
 import { createHash, createPublicKey, verify, randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { z } from 'zod'
+import { Impit } from 'impit'
+import { scraperProxyUrl } from './dns.mjs'
 
 export const sourceId = z.string().regex(/^[a-z][a-z0-9.-]{0,79}$/)
 const field = z.object({ key: z.string().regex(/^[a-zA-Z][a-zA-Z0-9_]*$/), label: z.string(), type: z.enum(['text', 'secret', 'select']), options: z.array(z.string()).optional(), default: z.string().optional() })
@@ -47,7 +49,10 @@ async function download(url, max, redirects = 0) {
   const parsed = new URL(url)
   if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && ['127.0.0.1', 'localhost', '[::1]'].includes(parsed.hostname))) throw new Error('Use HTTPS (HTTP is allowed only on loopback for development)')
   if (parsed.username || parsed.password) throw new Error('Credentials in repository URLs are not supported')
-  const response = await fetch(url, { signal: AbortSignal.timeout(30000), redirect: 'manual' })
+  const proxyUrl = parsed.protocol === 'https:' ? await scraperProxyUrl() : null
+  const response = proxyUrl
+    ? await new Impit({ proxyUrl }).fetch(url, { timeout: 30000, redirect: 'manual' })
+    : await fetch(url, { signal: AbortSignal.timeout(30000), redirect: 'manual' })
   if ([301, 302, 303, 307, 308].includes(response.status)) {
     if (redirects >= 5 || !response.headers.get('location')) throw new Error('Too many or invalid redirects')
     const next = new URL(response.headers.get('location'), url)
@@ -64,7 +69,7 @@ const unavailable = () => Object.assign(new Error('Source unavailable. Install o
 class Runner {
   constructor(path, manifest, config, stateDir) {
     this.pending = new Map(); this.buffer = ''; this.manifest = manifest; this.lastUsed = Date.now()
-    const env = Object.fromEntries(['PATH', 'Path', 'SystemRoot', 'WINDIR', 'TEMP', 'TMP', 'HOME', 'USERPROFILE', 'LOCALAPPDATA', 'PLAYWRIGHT_BROWSERS_PATH'].filter(k => process.env[k]).map(k => [k, process.env[k]]))
+    const env = Object.fromEntries(['PATH', 'Path', 'SystemRoot', 'WINDIR', 'TEMP', 'TMP', 'HOME', 'USERPROFILE', 'LOCALAPPDATA', 'PLAYWRIGHT_BROWSERS_PATH', 'SCRAPER_DNS_ENABLED', 'SCRAPER_DNS_SERVERS'].filter(k => process.env[k]).map(k => [k, process.env[k]]))
     this.child = spawn(process.execPath, [resolve(process.cwd(), 'extensions/runner.mjs'), path], { cwd: dirname(path), env: { ...env, INKRAIL_SOURCE_CONFIG: JSON.stringify(config), DATA_DIR: stateDir }, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true })
     this.child.stdout.setEncoding('utf8')
     this.child.stdout.on('data', chunk => {

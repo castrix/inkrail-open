@@ -66,3 +66,9 @@ See [extension authoring](docs/extensions.md), [architecture](docs/architecture.
 ## Private data and licensing
 
 `data/`, `.env`, `work/`, databases, downloaded content, backups, logs, dependency folders, build outputs, and signing keys are ignored. Never publish those folders or an old installation's Git history. This repository contains no imported library or old history. MIT applies to original Inkrail code; third-party packages retain their own licenses. See [THIRD_PARTY.md](THIRD_PARTY.md).
+
+## DNS override
+
+Cloudflare DNS-over-HTTPS is enabled by default for source requests. Set `SCRAPER_DNS_ENABLED=false` to use system DNS, or set `SCRAPER_DNS_SERVERS=1.1.1.1,1.0.0.1` to choose comma-separated resolver IPs. Custom resolvers must support HTTPS `/dns-query` with the Cloudflare-compatible JSON API and a valid certificate for their IP address. Ordinary UDP DNS servers are not supported by this setting.
+
+Inkrail Open exposes these options under **Advanced settings** in first-run setup and the tray **Settings** window. Save and restart to apply changes; source extensions inherit these settings. Core repository downloads also use the override. No Windows or router DNS settings are changed. HTTPS remains encrypted end to end; resolver failures are reported without silently falling back to system DNS. The resolver currently requires IPv4 answers (A records).

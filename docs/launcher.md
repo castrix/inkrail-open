@@ -28,3 +28,7 @@ Quit before replacing application files, including `.output`, from a new release
 The release ZIP includes the compiled EXE. In a source-only Git checkout, run **Launch.cmd** once to compile the launcher using the Windows framework compiler, then use **InkrailOpen.exe**. Maintainers can also run `powershell -File scripts/launcher/build.ps1`.
 
 Configuration, databases, downloaded content, logs and installed application dependencies are excluded from the public release. The release includes public source files, the launcher EXE and the production `.output` build with its bundled server dependencies.
+
+### Advanced DNS settings
+
+Expand **Advanced settings** during setup or in tray **Settings**. DNS override is enabled with Cloudflare `1.1.1.1,1.0.0.1` by default. Disable it to use system DNS, or enter comma-separated IP addresses of compatible JSON DNS-over-HTTPS resolvers. **Save and restart** applies the settings to repository downloads and source extension processes. Existing explicit DNS settings are preserved.

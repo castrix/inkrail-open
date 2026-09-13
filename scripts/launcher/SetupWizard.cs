@@ -17,6 +17,10 @@ internal sealed class SetupWizard : Form
     readonly NumericUpDown port = new NumericUpDown();
     readonly CheckBox network = new CheckBox();
     readonly CheckBox browser = new CheckBox();
+    readonly CheckBox advanced = new CheckBox();
+    readonly CheckBox dnsEnabled = new CheckBox();
+    readonly TextBox dnsServers = new TextBox();
+    readonly Panel dnsPanel = new Panel();
     readonly TextBox password = new TextBox();
     readonly TextBox progress = new TextBox();
     readonly Label heading = new Label();
@@ -32,7 +36,7 @@ internal sealed class SetupWizard : Form
     {
         settingsMode = settings;
         Text = settings ? "Inkrail Open - Settings" : "Inkrail Open - Setup";
-        ClientSize = new Size(640, 490); MinimumSize = new Size(656, 529);
+        ClientSize = new Size(640, 650); MinimumSize = new Size(656, 689);
         FormBorderStyle = FormBorderStyle.FixedDialog; MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
         Font = new Font("Segoe UI", 10);
@@ -42,7 +46,7 @@ internal sealed class SetupWizard : Form
         dependency.SetBounds(24, 70, 590, 72); Controls.Add(dependency);
         install.Text = "Install Node.js LTS"; install.SetBounds(24, 146, 210, 36);
         install.Click += delegate { InstallNode(); }; Controls.Add(install);
-        configuration.SetBounds(24, 145, 590, 250); Controls.Add(configuration);
+        configuration.SetBounds(24, 145, 590, 425); Controls.Add(configuration);
         var portLabel = new Label { Text = "Web port", Left = 0, Top = 8, Width = 150 };
         port.SetBounds(185, 4, 140, 30); port.Minimum = 1; port.Maximum = 65535; port.Value = 4000;
         network.Text = "Allow access from other devices"; network.SetBounds(0, 48, 540, 28);
@@ -52,11 +56,21 @@ internal sealed class SetupWizard : Form
         show.CheckedChanged += delegate { password.UseSystemPasswordChar = !show.Checked; };
         browser.Text = "Install browser support for browser-based sources (optional)";
         browser.SetBounds(0, 172, 585, 30);
+        advanced.Text = "Advanced settings"; advanced.SetBounds(0, 212, 300, 28);
+        dnsPanel.SetBounds(0, 246, 585, 165); dnsPanel.Visible = false;
+        dnsEnabled.Text = "Override DNS with DNS-over-HTTPS"; dnsEnabled.SetBounds(0, 0, 550, 28); dnsEnabled.Checked = true;
+        var dnsLabel = new Label { Text = "Resolver IP addresses", Left = 0, Top = 40, Width = 180 };
+        dnsServers.SetBounds(185, 36, 365, 30); dnsServers.Text = "1.1.1.1,1.0.0.1"; dnsServers.AccessibleName = "DNS-over-HTTPS resolver IP addresses";
+        var dnsHelp = new Label { Text = "Default: Cloudflare (1.1.1.1, 1.0.0.1). Custom IPs must support JSON DNS-over-HTTPS. Disable to use system DNS. Applies to Inkrail and source extensions after restart.", Left = 0, Top = 76, Width = 550, Height = 70 };
+        dnsEnabled.CheckedChanged += delegate { dnsServers.Enabled = dnsEnabled.Checked; };
+        advanced.CheckedChanged += delegate { dnsPanel.Visible = advanced.Checked; };
+        dnsPanel.Controls.AddRange(new Control[] { dnsEnabled, dnsLabel, dnsServers, dnsHelp });
+        configuration.Controls.Add(advanced); configuration.Controls.Add(dnsPanel);
         configuration.Controls.AddRange(new Control[] { portLabel, port, network, passwordLabel, password, show, browser });
         progress.SetBounds(24, 145, 590, 260); progress.Multiline = true; progress.ReadOnly = true;
         progress.ScrollBars = ScrollBars.Vertical; progress.Visible = false; progress.AccessibleName = "Installation progress"; Controls.Add(progress);
-        next.SetBounds(414, 432, 200, 36); next.Click += delegate { Advance(); }; Controls.Add(next);
-        var cancel = new Button { Text = "Cancel", Left = 24, Top = 432, Width = 110, Height = 36 };
+        next.SetBounds(414, 592, 200, 36); next.Click += delegate { Advance(); }; Controls.Add(next);
+        var cancel = new Button { Text = "Cancel", Left = 24, Top = 592, Width = 110, Height = 36 };
         cancel.Click += delegate { if (!busy) Close(); }; Controls.Add(cancel);
         FormClosing += delegate(object sender, FormClosingEventArgs e) { if (busy) e.Cancel = true; };
         Shown += delegate { RefreshDependencies(); };
@@ -111,6 +125,7 @@ internal sealed class SetupWizard : Form
                 int p; if (Int32.TryParse(values["port"], out p) && p > 0 && p <= 65535) port.Value = p;
                 savedHost = values["host"]; network.Checked = savedHost == "0.0.0.0" || savedHost == "::";
                 password.Text = values["password"];
+                dnsEnabled.Checked = values["dnsEnabled"] != "false"; dnsServers.Text = values["dnsServers"];
                 if (password.Text.Length == 0) { var bytes = new byte[16]; using (var rng = RandomNumberGenerator.Create()) rng.GetBytes(bytes); password.Text = BitConverter.ToString(bytes).Replace("-", "").ToLowerInvariant(); }
                 if (settingsMode) { configuration.Visible = true; step = 1; }
             } catch (Exception e) { MessageBox.Show(e.Message, Text); next.Enabled = false; }
@@ -151,7 +166,7 @@ internal sealed class SetupWizard : Form
         }
         if (password.Text.Length < 8 || password.Text.IndexOfAny(new char[] { '\r', '\n', '"', '\'', '`', '\0' }) >= 0) { MessageBox.Show("Use at least 8 password characters, without quotes, backticks or line breaks.", Text); return; }
         string selectedHost = network.Checked ? (savedHost == "::" ? "::" : "0.0.0.0") : (savedHost == "::1" || savedHost == "localhost" ? savedHost : "127.0.0.1");
-        string payload = json.Serialize(new Dictionary<string, string> { { "port", port.Value.ToString() }, { "host", selectedHost }, { "password", password.Text } });
+        string payload = json.Serialize(new Dictionary<string, string> { { "port", port.Value.ToString() }, { "host", selectedHost }, { "password", password.Text }, { "dnsEnabled", dnsEnabled.Checked ? "true" : "false" }, { "dnsServers", dnsServers.Text } });
         bool installBrowser = browser.Checked;
         heading.Text = settingsMode ? "Applying settings" : "Preparing Inkrail Open";
         dependency.Text = "Please keep this window open. Initial download and build can take several minutes.";
