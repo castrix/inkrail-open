@@ -13,7 +13,7 @@ Export a default object with `metadata` and every declared capability method. Re
 1. Build/test the source code on your own computer or CI. Keep the signing key outside Git.
 2. Generate a persistent Ed25519 private key (Node's `generateKeyPairSync('ed25519')` or OpenSSL).
 3. Set `INKRAIL_SIGNING_KEY` to the private PEM file path and `INKRAIL_RELEASE_BASE_URL` to the HTTPS directory where package artifacts will be uploaded.
-4. Run `npm ci`, `npm test`, and `npm run build` in the source repository. It produces `dist/index.json` and versioned `.inkrail.json` packages, and prints the publisher fingerprint.
+4. Run `npm ci`, `npm test`, and `npm run build` in the source repository. It produces `dist/public/index.json` and versioned `.inkrail.json` packages selected by `public-packages.json`, and prints the publisher fingerprint.
 5. Publish all artifacts without modifying them. Publish the fingerprint separately where users can verify your identity. Users add the index URL and fingerprint to Inkrail.
 6. Increment a source's version, rebuild/sign, and replace the index to issue updates. Users choose **Check for updates** and **Update**. Reuse your signing key. Do not silently overwrite released versions.
 

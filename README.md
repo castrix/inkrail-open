@@ -25,9 +25,16 @@ Keep the full checkout and production dependencies when running: the source runn
 
 ## Install sources
 
+Use the [public extension import guide](https://github.com/castrix/inkrail-sources/blob/main/docs/importing.md) for MangaDex and TWKAN. In **Extensions > Add repository**, enter:
+
+- **Repository index URL:** `https://raw.githubusercontent.com/castrix/inkrail-sources/main/repository/index.json`
+- **Publisher SHA-256 fingerprint:** `cfc683ef1fc8e8504bbdb899ba839116eb6deb120b7aa07e18ca91bf1f624436`
+
+Confirm that you trust the publisher, select **Add repository**, then **Install** on a source and **Browse** under Installed. Paste the index URL above, not the GitHub homepage or a website URL. No rebuild or restart is needed.
+
 Open **Extensions**, enter a signed repository index URL and the publisher's SHA-256 key fingerprint, and choose whether to trust that publisher. Then install a source. Browse and search discover installed sources immediately; no app rebuild or restart is required. Update checks are manual. Disable, restart, configure, rollback, and uninstall are available there too.
 
-Repositories may live on static HTTPS hosting, raw GitHub files, or release assets. HTTP is allowed only for localhost development. The accompanying `inkrail-sources` repository contains four extracted adapters and two explicitly labeled synthetic examples. It is a separate repository to publish or fork, not a preconfigured public service.
+Repositories may live on static HTTPS hosting, raw GitHub files, or release assets. HTTP is allowed only for localhost development. The public `inkrail-sources` repository includes MangaDex, TWKAN, and two explicitly labeled synthetic examples. It is installed manually using the index above; no publisher is trusted automatically.
 
 **Extensions execute trusted third-party code on your server.** Signatures pin the publisher and detect modified packages; they do not sandbox code. Processes isolate crashes and receive only source-specific configuration, but retain the host user's filesystem privileges. Run the whole app under a dedicated OS account or a suitably restricted container when appropriate. Do not expose an unauthenticated extension installer.
 
