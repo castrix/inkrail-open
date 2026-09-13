@@ -1,5 +1,7 @@
 # Inkrail
 
+[Inkrail Open application](https://github.com/castrix/inkrail-open) · [Installable source packages](https://github.com/castrix/inkrail-sources)
+
 A self-hosted novel and manga library, reader, and optional translation workspace. Nuxt 3, TypeScript, Prisma, SQLite, Node.js 24 or newer.
 
 Inkrail starts with an empty library and no installed sources. Website integrations are separate packages installed at runtime from repositories you choose. Android/Tachiyomi APK extensions are not compatible with this protocol.
